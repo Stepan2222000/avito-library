@@ -21,7 +21,7 @@ Playwright-библиотека для асинхронного парсинга
 ## Установка
 
 ```bash
-pip install git+https://github.com/Stepan2222000/avito-library.git@v0.1.0#egg=avito-library
+pip install git+https://github.com/Stepan2222000/avito-library.git@main#egg=avito-library
 playwright install chromium  # выполнить один раз после установки
 ```
 
