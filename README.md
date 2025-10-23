@@ -88,36 +88,87 @@ if __name__ == "__main__":
 
 ## API-справочник
 
+### Базовый модуль `avito_library`
+- `MAX_PAGE: int | None` — глобальный предел страниц, который учитывает `collect_seller_items`. Установите его в целевом проекте, чтобы ограничить глубину пагинации профиля.
+- `install_playwright_chromium(check: bool = True) -> int` — обёртка над `python -m playwright install chromium`. Возвращает код выхода Playwright и позволяет управлять флагом `check` при запуске в CI/CD.
+- `install_playwright_chromium_cli()` — CLI-энтрипоинт (экспортируется как консольный скрипт `avito-install-chromium`).
+
 ### Детекторы (`avito_library.detectors`)
-- `detect_page_state(page: Page, ...) -> str`: запускает зарегистрированные детекторы в порядке приоритета и возвращает идентификатор состояния.
-- `DetectionError`: исключение, выбрасывается, если состояние определить не удалось.
-- Константы `*_DETECTOR_ID`: строковые идентификаторы, которые возвращают отдельные детекторы.
-- `DETECTOR_FUNCTIONS`, `DETECTOR_DEFAULT_ORDER`, `DETECTOR_WAIT_TIMEOUT_RESOLVERS`: словари/кортежи для ручного конфигурирования внешними системами.
+- `detect_page_state(page: Page, *, skip=None, priority=None, detector_kwargs=None, last_response=None) -> str`  
+  Выполняет зарегистрированные детекторы в порядке приоритета и возвращает идентификатор состояния.  
+  Параметры:
+  - `skip`: Iterable[str] — список детекторов, которые следует исключить (например, `{"captcha_geetest_detector"}`).
+  - `priority`: Sequence[str] — собственный порядок обхода. Переданные идентификаторы будут проверены раньше дефолтного порядка.
+  - `detector_kwargs`: Mapping[str, Mapping[str, object]] — дополнительные аргументы для отдельных детекторов (например, таймауты капчи).
+  - `last_response`: Response | None — последний HTTP-ответ Playwright; нужен детекторам, которые анализируют статус-коды.
+  Возвращает строковый идентификатор детектора (например, `catalog_page_detector`). Выбрасывает `DetectionError`, если ни один детектор не сработал или переданы неизвестные идентификаторы.
+- `DetectionError` — лучше ловить вокруг вызовов навигации и логировать пустой HTML, чтобы диагностировать новые состояния.
+- Регистры:
+  - `DETECTOR_FUNCTIONS` — словарь `id -> coroutine`.
+  - `DETECTOR_DEFAULT_ORDER` — последовательность, описывающая стандартный приоритет (блокировки → капча → каталог → карточка → continue).
+  - `DETECTOR_WAIT_TIMEOUT_RESOLVERS` — позволяет централизованно вычислять таймауты для отдельных детекторов (сейчас используется только капча).
+- Идентификаторы состояний:
+  - `CAPTCHA_DETECTOR_ID` — видим Geetest.
+  - `CONTINUE_BUTTON_DETECTOR_ID` — отображается кнопка «Продолжить».
+  - `CATALOG_DETECTOR_ID` — мы в каталоге.
+  - `CARD_FOUND_DETECTOR_ID` — карточка объявления.
+  - `SELLER_PROFILE_DETECTOR_ID` — профиль продавца.
+  - `PROXY_BLOCK_403_DETECTOR_ID` / `PROXY_BLOCK_429_DETECTOR_ID` / `PROXY_AUTH_DETECTOR_ID` — разные варианты блокировок прокси.
+  - `REMOVED_DETECTOR_ID` — объявление снято или удалено.
 
-### Утилиты (`avito_library.utils`)
-- `press_continue_and_detect(page: Page, ...) -> str`: нажимает кнопку «Продолжить» (если она есть) и определяет новое состояние страницы с учётом капчи и блокировок.
+### Утилита «Продолжить» (`avito_library.utils.press_continue_and_detect`)
+- `press_continue_and_detect(page: Page, *, skip_initial_detector=False, detector_kwargs=None, max_retries=10, wait_timeout=30.0) -> str`  
+  Имитация ручного нажатия кнопки «Продолжить» с повторным детектом состояния.  
+  Логика:
+  1. По умолчанию сначала вызывается `detect_page_state` с собственным приоритетом, чтобы избежать лишних кликов.
+  2. Если требуется, нажимает кнопку до пяти раз подряд (force-click) и ждёт изменения состояния.
+  3. Каждые 10 секунд проверяет состояние, пока не выйдет `wait_timeout`.  
+  Возвращает итоговый идентификатор состояния (капча, каталог, карточка и т. д.). Полезно вызывать перед парсингом или после редиректов.
 
-### Капча (`avito_library.capcha`)
-- `resolve_captcha_flow(page: Page, max_attempts: int = 3) -> tuple[str, bool]`: пытается пройти геест-капчу, возвращает HTML и признак успеха.
-- `solve_slider_once(page: Page) -> tuple[str, bool]`: один прогон решения с расчётом смещения с помощью OpenCV.
+### Геест-капча (`avito_library.capcha`)
+- `resolve_captcha_flow(page: Page, *, max_attempts: int = 3) -> tuple[str, bool]`  
+  Комплектует нажатие «Продолжить», одноразовый солвер и повторную проверку состояния. Возвращает последний HTML и флаг `solved`. Если капча не исчезает или приходит 429, вернётся `False`. Используйте при ответе `detect_page_state` равном `CAPTCHA_DETECTOR_ID` или `PROXY_BLOCK_429_DETECTOR_ID`.
+- `solve_slider_once(page: Page) -> tuple[str, bool]`  
+  Выполняет один прогон Geetest: тянет изображения через Playwright, вычисляет смещение с помощью OpenCV, использует кеш (`data/geetest_cache.json`). Возвращает HTML и признак успеха. Рекомендуется вызывать напрямую только для отладки; в проде используйте `resolve_captcha_flow`.
 
 ### Парсер карточек (`avito_library.parsers.card_parser`)
-- `parse_card(html: str, fields: Iterable[str], ensure_card: bool = True, include_html: bool = False) -> CardData`: извлекает указанные поля из HTML карточки.
-- `CardData`: dataclass с полями объявления (заголовок, цена, продавец, id и т. п.).
-- `CardParsingError`: исключение, если HTML не похож на карточку.
+- `parse_card(html: str, *, fields: Iterable[str], ensure_card: bool = True, include_html: bool = False) -> CardData`  
+  Извлекает указанные поля (см. ниже) из HTML карточки.  
+  Особенности:
+  - `fields` — набор строк, допустимые значения: `title`, `price`, `seller`, `item_id`, `published_at`, `description`, `location`, `characteristics`, `views_total`, `raw_html`.
+  - `ensure_card=True` заставляет проверять наличие идентификатора карточки и выбрасывать `CardParsingError`, если HTML не похож на карточку.
+  - `include_html=True` независимо от `fields` кладёт исходный HTML в `CardData.raw_html`.
+- `CardData` — dataclass с полями объявления. Все значения опциональны, чтобы устойчиво переживать неполные данные.
+- `CardParsingError` — бросается при отсутствии обязательной разметки. Ловите его, если HTML пришёл с ошибкой.
 
 ### Парсер каталога (`avito_library.parsers.catalog_parser`)
-- `parse_catalog(page: Page, catalog_url: str, fields: Iterable[str], ...) -> CatalogParseResult`: обходит каталог, управляет повторными запросами и детекторами состояний.
-- `CatalogListing`: dataclass карточки каталога.
-- `CatalogParseMeta`: метаинформация о выполнении (обработанные страницы, состояние и т. п.).
-- `CatalogParseStatus`: перечисление возможных статусов (`success`, `rate_limit`, `captcha_unsolved` и др.).
-- `parse_catalog_until_complete(...) -> CatalogParseResult`: оркестратор, который повторно запрашивает страницы через `wait_for_page_request` / `supply_page`.
-- `PageRequest`: структура запроса новой страницы от внешнего координатора.
+- `parse_catalog(page: Page, catalog_url: str, *, fields: Iterable[str], max_pages: int | None = 1, sort_by_date: bool = False, include_html: bool = False, start_page: int = 1) -> CatalogParseResult`  
+  Загружает страницы каталога, кликает «Продолжить», решает капчу и собирает карточки.  
+  Советы по использованию:
+  - Передавайте `fields` с подмножеством ключей: `title`, `price`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `snippet`, `location`, `promoted`, `published`, `raw_html`.
+  - `max_pages=None` включает полный обход, иначе ограничивает количество страниц (вместе с `start_page`).
+  - `sort_by_date=True` добавляет `s=104` к URL.
+  - Возвращаемое значение — `(listings, meta)`, где `listings` — список `CatalogListing`, `meta` — `CatalogParseMeta`.
+  - При получении статуса `CatalogParseStatus.CAPTCHA_UNSOLVED` имеет смысл вызвать `resolve_captcha_flow` и повторить запрос.
+- `CatalogListing` — модель карточки каталога (ID, заголовок, цена, продавец, промометки, HTML).
+- `CatalogParseMeta` — содержит статус, количество обработанных страниц/карточек, последний URL и текстовые детали.
+- `CatalogParseStatus` — перечисление возможных исходов (`SUCCESS`, `EMPTY`, `RATE_LIMIT`, `PROXY_BLOCKED` и т. д.).
+- Потоковый режим:
+  - `parse_catalog_until_complete(...) -> CatalogParseResult` — выполняет многошаговый обход, автоматически дозапрашивая свежие страницы до успеха или исчерпания лимита.
+  - `PageRequest` — объект, который оркестратор отправляет внешний системе, если нужна новая страница Playwright.
+  - `wait_for_page_request()`, `supply_page(page)`, `set_page_exchange(exchange)` — вспомогательные функции для интеграции с менеджером браузерных страниц. Используйте их, если вы управляете пулом Playwright-страниц вручную.
 
-### Парсер продавца (`avito_library.parsers.seller_profile_parser`)
-- `collect_seller_items(page: Page, ...) -> dict`: собирает информацию о продавце и его объявлениях, переиспользуя текущую страницу.
-- `SellerProfileParsingResult`: тип результата (словарь с ключами `seller_name`, `item_ids`, `state`, `is_complete`).
-- `SellerIdNotFound`: исключение, если идентификатор продавца не найден.
+### Парсер профиля продавца (`avito_library.parsers.seller_profile_parser`)
+- `collect_seller_items(page: Page, *, min_price: int | None = 8000, condition_titles: Sequence[str] | None = None) -> SellerProfileParsingResult`  
+  Снимает имя продавца и список ID его объявлений, используя API `/web/1/profile/items`.  
+  Поведение:
+  - Перед началом вызывает `detect_page_state`; при капче — `resolve_captcha_flow`.
+  - `min_price` фильтрует объявления по минимальной цене (значение извлекается из JSON).
+  - `condition_titles` — список значений бейджей (например, `["Новый", "Как новый"]`); приводятся к нижнему регистру.
+  - Возвращает словарь с ключами: `state`, `seller_name`, `item_ids`, `pages_collected`, `is_complete`. В `state` остаётся идентификатор детектора, который завершил работу (чаще всего `seller_profile_detector`).
+- `SellerProfileParsingResult` — псевдоним словаря результата (см. выше).
+- `SellerIdNotFound` — исключение, выбрасываемое, если парсер не нашёл `sellerId` в HTML (перехватывается внутри `collect_seller_items`, но полезно для тестов).
+
 
 ## Данные
 
