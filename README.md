@@ -22,7 +22,7 @@ Playwright-библиотека для асинхронного парсинга
 
 ```bash
 pip install git+https://github.com/Stepan2222000/avito-library.git@v0.1.0#egg=avito-library
-avito-install-chromium  # или playwright install chromium
+playwright install chromium  # выполнить один раз после установки
 ```
 
 Для использования внутри `requirements.txt` добавьте строку:
