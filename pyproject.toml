@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avito-library"
+version = "0.1.0"
+description = "Playwright-based инструментарий для парсинга Авито: детекторы состояний, решатель капчи и парсеры каталога/карточек."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [
+    { name = "Stepan Orlov" }
+]
+dependencies = [
+    "playwright>=1.45.0",
+    "asyncpg>=0.29",
+    "beautifulsoup4>=4.12",
+    "lxml>=4.9",
+    "numpy>=1.26",
+    "opencv-python>=4.10.0.0"
+]
+keywords = ["avito", "playwright", "asyncio", "captcha", "parser"]
+
+[project.urls]
+Repository = "https://github.com/Stepan2222000/avito-library"
+Issues = "https://github.com/Stepan2222000/avito-library/issues"
+
+[project.scripts]
+avito-install-chromium = "avito_library.install_browser:install_playwright_chromium_cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["avito_library", "avito_library.*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+avito_library = ["data/*.json"]
