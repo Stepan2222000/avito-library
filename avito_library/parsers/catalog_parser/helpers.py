@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, Tuple
+from typing import Tuple
 from urllib.parse import parse_qsl, urljoin, urlencode, urlparse, urlunparse
 
 from playwright.async_api import Locator, Page, TimeoutError
@@ -17,6 +17,9 @@ SCROLL_ATTEMPTS = 10
 SCROLL_DELAY_MS = 500
 NETWORK_IDLE_TIMEOUT = 5_000
 NETWORK_IDLE_FALLBACK_MS = 2_000
+PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
+SNIPPET_SELECTOR = 'div[class*="item-bottomBlock"] p'
+SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
 
 __all__ = [
     "apply_sort",
@@ -165,7 +168,7 @@ async def extract_listing(
         )
 
     if "promoted" in fields:
-        promoted = await card.locator('[data-marker="item-badge"] span:has-text("Продвинуто")').count() > 0
+        promoted = await card.locator(PROMOTED_BADGE_SELECTOR).count() > 0
 
     if include_html:
         raw_html = await card.inner_html()
@@ -203,13 +206,9 @@ async def _extract_snippet(card: Locator) -> str | None:
         if content:
             return content.strip()
 
-    paragraph = card.locator('[data-marker="item-description"]').first
-    if await paragraph.count():
-        return (await paragraph.inner_text()).strip()
-
-    params = card.locator('[data-marker="item-specific-params"]').first
-    if await params.count():
-        return (await params.inner_text()).strip()
+    text_node = card.locator(SNIPPET_SELECTOR).first
+    if await text_node.count():
+        return (await text_node.inner_text()).strip()
 
     fallback = card.locator("p").first
     if await fallback.count():
@@ -255,11 +254,11 @@ async def _fill_seller_info(
     reviews: int | None = None
 
     profile_link = card.locator(
-        'div.iva-item-sellerInfo-w2qER a[href*="/brands/"], '
-        'div.iva-item-sellerInfo-w2qER a[href*="/user/"]'
+        f"{SELLER_CONTAINER_SELECTOR} a[href*='/brands/'], "
+        f"{SELLER_CONTAINER_SELECTOR} a[href*='/user/']"
     ).first
     if not await profile_link.count():
-        profile_link = card.locator('a[href*="/brands/"], a[href*="/user/"]').first
+        profile_link = card.locator("a[href*='/brands/'], a[href*='/user/']").first
     if await profile_link.count():
         if "seller_name" in fields:
             name_node = profile_link.locator("p").first
@@ -268,18 +267,20 @@ async def _fill_seller_info(
             else:
                 name_text = await profile_link.inner_text()
                 if name_text:
-                    name = name_text.strip()
+                    name = name_text.strip().splitlines()[0]
         href = await profile_link.get_attribute("href")
         if href and "seller_id" in fields:
             seller_id = _extract_seller_id(href)
     else:
         if "seller_name" in fields:
-            name_node = card.locator('div.iva-item-sellerInfo-w2qER p').first
+            name_node = card.locator(f"{SELLER_CONTAINER_SELECTOR} p").first
             if await name_node.count():
                 name = (await name_node.inner_text()).strip()
 
     if "seller_rating" in fields:
         rating_text = await _get_inner_text(card, '[data-marker="seller-info/score"]')
+        if not rating_text:
+            rating_text = await _get_inner_text(card, '[data-marker="seller-rating/score"]')
         if rating_text:
             rating = _parse_float(rating_text)
 
