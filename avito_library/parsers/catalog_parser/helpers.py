@@ -18,7 +18,7 @@ SCROLL_DELAY_MS = 500
 NETWORK_IDLE_TIMEOUT = 5_000
 NETWORK_IDLE_FALLBACK_MS = 2_000
 PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
-SNIPPET_SELECTOR = 'div[class*="item-bottomBlock"] p'
+SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
 
 __all__ = [
@@ -85,7 +85,20 @@ async def load_catalog_cards(page: Page) -> list[Locator]:
         except TimeoutError:
             break
 
-    return await catalog_locator.all()
+    cards = await catalog_locator.all()
+    filtered: list[Locator] = []
+    for card in cards:
+        # Блок рекомендаций («Похоже на то, что вы ищете») расположен ниже основного
+        # списка и идёт после заголовка с классом items-extraTitle-*. Отличить карточки
+        # блока можно по тому, что перед ними в DOM встречается этот заголовок.
+        preceding_heading = card.locator(
+            "xpath=preceding::div[contains(@class, 'items-extraTitle')]"
+        )
+        if await preceding_heading.count():
+            continue
+        filtered.append(card)
+
+    return filtered
 
 
 async def get_next_page_url(page: Page, current_url: str) -> Tuple[bool, str | None]:
