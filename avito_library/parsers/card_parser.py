@@ -242,3 +242,4 @@ def _extract_views(soup: BeautifulSoup) -> Optional[int]:
         return int("".join(digits))
     except ValueError:
         return None
+
