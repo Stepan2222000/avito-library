@@ -98,12 +98,21 @@ async def collect_seller_items(
     *,
     min_price: int | None = 8000,
     condition_titles: Sequence[str] | None = None,
+    include_items: bool = False,
+    item_fields: Sequence[str] | None = None,
+    item_schema: dict[str, Any] | None = None,
 ) -> SellerProfileParsingResult:
-    """Collect seller name and item identifiers from an opened Playwright page."""
+    """Collect seller name, item identifiers and optional payload from an opened Playwright page."""
 
     pages_collected = 0
     item_ids: list[int] = []
     allowed_conditions = _normalize_condition_titles(condition_titles)
+    collect_details = include_items or bool(item_fields) or bool(item_schema)
+    normalized_fields = (
+        _normalize_item_fields(item_fields) if collect_details else None
+    )
+    item_details: list[dict[str, Any]] | None = [] if collect_details else None
+    schema_by_id: dict[int, Any] | None = {} if item_schema else None
 
     try:
         state = await detect_page_state(page, priority=[SELLER_PROFILE_DETECTOR_ID])
@@ -184,16 +193,24 @@ async def collect_seller_items(
             catalog_page,
             min_price,
             allowed_conditions,
+            include_details=collect_details,
+            allowed_fields=normalized_fields,
+            collect_schema=bool(item_schema),
         )
         if result is None:
             pagination_truncated = True
             break
 
-        end, ids = result
+        end, ids, details, raw_items = result
         pages_collected += 1
 
         if ids:
             item_ids.extend(ids)
+        if collect_details and item_details is not None and details:
+            item_details.extend(details)
+        if schema_by_id is not None and raw_items:
+            for item_id, raw_item in zip(ids, raw_items):
+                schema_by_id[item_id] = _extract_from_schema(raw_item, item_schema or {})
 
         if end:
             pagination_complete = True
@@ -202,13 +219,23 @@ async def collect_seller_items(
             pagination_truncated = True
             break
 
-    return {
+    response: SellerProfileParsingResult = {
         "state": SELLER_PROFILE_DETECTOR_ID,
         "seller_name": seller_name,
         "item_ids": item_ids,
         "pages_collected": pages_collected,
         "is_complete": pagination_complete and not pagination_truncated,
     }
+    if (include_items or bool(item_fields)) and item_details is not None:
+        response["items"] = item_details
+        response["item_titles"] = [
+            item.get("title")
+            for item in item_details
+            if isinstance(item, dict) and isinstance(item.get("title"), str)
+        ]
+    if schema_by_id is not None:
+        response["items_by_id"] = schema_by_id
+    return response
 
 
 async def _extract_seller_name(page: Page) -> str | None:
@@ -237,7 +264,16 @@ async def _catalog(
     items_page: int,
     min_price: int | None,
     allowed_conditions: set[str] | None,
-) -> tuple[bool, list[int]] | None:
+    *,
+    include_details: bool,
+    allowed_fields: set[str] | None,
+    collect_schema: bool,
+) -> tuple[
+    bool,
+    list[int],
+    list[dict[str, Any]] | None,
+    list[dict[str, Any]] | None,
+] | None:
     url = (
         "https://www.avito.ru/web/1/profile/items"
         f"?sellerId={seller_id}&limit=100&p={items_page}"
@@ -250,17 +286,36 @@ async def _catalog(
     assert catalog, "Продавец не найден"
 
     items = catalog.get("items") or []
-    ids = [
-        _safe_int(item.get("id"))
-        for item in items
-        if item.get("id") is not None
-        and _passes_min_price(item, min_price)
-        and _matches_condition(item, allowed_conditions)
-    ]
-    ids = [item_id for item_id in ids if item_id is not None]
+    filtered_ids: list[int] = []
+    filtered_items: list[dict[str, Any]] = []
+    schema_items: list[dict[str, Any]] | None = [] if collect_schema else None
+
+    for item in items:
+        raw_id = item.get("id")
+        if raw_id is None:
+            continue
+        if not _passes_min_price(item, min_price):
+            continue
+        if not _matches_condition(item, allowed_conditions):
+            continue
+
+        item_id = _safe_int(raw_id)
+        if item_id is None:
+            continue
+
+        filtered_ids.append(item_id)
+        if include_details:
+            filtered_items.append(_select_item_fields(item, allowed_fields))
+        if schema_items is not None:
+            schema_items.append(item)
 
     # Останавливаемся только когда API вернуло пустую страницу.
-    return (not items, ids)
+    return (
+        not items,
+        filtered_ids,
+        filtered_items if include_details else None,
+        schema_items,
+    )
 
 
 async def _fetch_profile_items(page: Page, url: str) -> dict[str, Any]:
@@ -336,6 +391,92 @@ def _normalize_condition_titles(condition_titles: Sequence[str] | None) -> set[s
         if isinstance(title, str) and title.strip()
     }
     return normalized or None
+
+
+def _normalize_item_fields(item_fields: Sequence[str] | None) -> set[str] | None:
+    if not item_fields:
+        return None
+    normalized = {
+        field.strip()
+        for field in item_fields
+        if isinstance(field, str) and field.strip()
+    }
+    return normalized or None
+
+
+def _select_item_fields(
+    item: dict[str, Any],
+    allowed_fields: set[str] | None,
+) -> dict[str, Any]:
+    if not allowed_fields:
+        return item
+    return {field: item.get(field) for field in allowed_fields}
+
+
+def _extract_from_schema(
+    item: dict[str, Any],
+    schema: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a payload for a single item according to the requested schema."""
+
+    extracted: dict[str, Any] = {}
+    for target_key, spec in schema.items():
+        extracted[target_key] = _resolve_schema_spec(item, spec)
+    return extracted
+
+
+def _resolve_schema_spec(source: dict[str, Any], spec: Any) -> Any:
+    if isinstance(spec, str):
+        return _resolve_path(source, spec)
+    if isinstance(spec, dict):
+        return {
+            key: _resolve_schema_spec(source, nested)
+            for key, nested in spec.items()
+        }
+    return spec
+
+
+def _resolve_path(source: Any, path: str) -> Any:
+    if not path:
+        return source
+    parts = path.split(".")
+    return _walk_path(source, parts)
+
+
+def _walk_path(current: Any, parts: list[str]) -> Any:
+    if not parts:
+        return current
+
+    segment = parts[0]
+    is_list = segment.endswith("[]")
+    key = segment[:-2] if is_list else segment
+
+    next_value = _get_value(current, key)
+    if next_value is None:
+        return [] if is_list else None
+
+    if is_list:
+        if not isinstance(next_value, list):
+            return []
+        remainder = parts[1:]
+        collected: list[Any] = []
+        for entry in next_value:
+            value = _walk_path(entry, remainder)
+            if value is None:
+                continue
+            if isinstance(value, list):
+                collected.extend(value)
+            else:
+                collected.append(value)
+        return collected
+
+    return _walk_path(next_value, parts[1:])
+
+
+def _get_value(source: Any, key: str) -> Any:
+    if isinstance(source, dict):
+        return source.get(key)
+    return None
 
 
 def _safe_int(value: Any) -> int | None:
