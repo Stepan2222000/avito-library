@@ -54,6 +54,15 @@ CATALOG_FIELDS = {
     "seller_name",
 }
 
+SELLER_SCHEMA = {
+    "title": "title",
+    "description": "description",
+    "price": "priceDetailed.value",
+    "category": "category.name",
+    "AutoPartsManufacturerStep": "iva.AutoPartsManufacturerStep[].payload.value",
+    "SparePartsParamsStep": "iva.SparePartsParamsStep[].payload.text",
+}
+
 async def main() -> None:
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
@@ -77,8 +86,12 @@ async def main() -> None:
             )
             print(f"Получено {len(listings)} объявлений, статус: {meta.status}")
 
-        seller_result = await collect_seller_items(page)
+        seller_result = await collect_seller_items(page, item_schema=SELLER_SCHEMA)
         print(f"Продавец: {seller_result['seller_name']}")
+        print(f"Всего объявлений: {len(seller_result['item_ids'])}")
+        sample_id = next(iter(seller_result["items_by_id"]), None)
+        if sample_id is not None:
+            print(f"Пример данных по схеме для {sample_id}: {seller_result['items_by_id'][sample_id]}")
 
         await browser.close()
 
@@ -159,13 +172,17 @@ if __name__ == "__main__":
   - `wait_for_page_request()`, `supply_page(page)`, `set_page_exchange(exchange)` — вспомогательные функции для интеграции с менеджером браузерных страниц. Используйте их, если вы управляете пулом Playwright-страниц вручную.
 
 ### Парсер профиля продавца (`avito_library.parsers.seller_profile_parser`)
-- `collect_seller_items(page: Page, *, min_price: int | None = 8000, condition_titles: Sequence[str] | None = None) -> SellerProfileParsingResult`  
-  Снимает имя продавца и список ID его объявлений, используя API `/web/1/profile/items`.  
+- `collect_seller_items(page: Page, *, min_price: int | None = 8000, condition_titles: Sequence[str] | None = None, include_items: bool = False, item_fields: Sequence[str] | None = None, item_schema: dict[str, Any] | None = None) -> SellerProfileParsingResult`  
+  Снимает имя продавца, список ID его объявлений и при необходимости отдаёт payload объявлений, используя API `/web/1/profile/items`.  
   Поведение:
   - Перед началом вызывает `detect_page_state`; при капче — `resolve_captcha_flow`.
   - `min_price` фильтрует объявления по минимальной цене (значение извлекается из JSON).
   - `condition_titles` — список значений бейджей (например, `["Новый", "Как новый"]`); приводятся к нижнему регистру.
-  - Возвращает словарь с ключами: `state`, `seller_name`, `item_ids`, `pages_collected`, `is_complete`. В `state` остаётся идентификатор детектора, который завершил работу (чаще всего `seller_profile_detector`).
+  - `include_items=True` добавляет в результат ключи `items` (список отфильтрованных объявлений) и `item_titles` (список строковых заголовков). Если оставить `False`, поведение полностью соответствует ранним версиям и возвращаются только ID.
+  - `item_fields` ограничивает состав полей внутри `items`. Передайте список ключей верхнего уровня (`["id", "title", "priceDetailed"]` и т. п.), чтобы вырезать из ответа всё лишнее. Если оставить `None`, в `items` попадёт полная структура JSON.
+  - `item_schema` — словарь с описанием требуемых данных по каждому объявлению. Ключ — имя в ответе, значение — строковый путь (через точку) или вложенная структура. Поддерживается `[]` для обхода списков. Пример: `{"title": "title", "price": "priceDetailed.value", "AutoPartsManufacturerStep": "iva.AutoPartsManufacturerStep[].payload.value", "SparePartsParamsStep": "iva.SparePartsParamsStep[].payload.text"}`.
+  - Возвращает словарь с ключами: `state`, `seller_name`, `item_ids`, `pages_collected`, `is_complete` и, при включённой детализации, `items`, `item_titles`. В `state` остаётся идентификатор детектора, который завершил работу (чаще всего `seller_profile_detector`).
+  - При переданном `item_schema` дополнительно появляется ключ `items_by_id`, где каждому `ID` соответствует словарь, собранный по схеме.
 - `SellerProfileParsingResult` — псевдоним словаря результата (см. выше).
 - `SellerIdNotFound` — исключение, выбрасываемое, если парсер не нашёл `sellerId` в HTML (перехватывается внутри `collect_seller_items`, но полезно для тестов).
 
