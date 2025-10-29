@@ -3,16 +3,32 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple
 
-from playwright.async_api import Page
+from playwright.async_api import Error as PlaywrightError, Page, TimeoutError as PlaywrightTimeoutError
 
 __all__ = ["capture_debug_screenshot", "DEBUG_SCREENSHOTS"]
 
-DEBUG_SCREENSHOTS: int = int(os.getenv("AVITO_DEBUG_SCREENSHOTS", "0"))
+logger = logging.getLogger(__name__)
+
+
+def _read_positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(0, value)
+
+
+DEBUG_SCREENSHOTS: int = _read_positive_int_env("AVITO_DEBUG_SCREENSHOTS", 0)
+DEBUG_SCREENSHOT_TIMEOUT_MS: int = _read_positive_int_env("AVITO_DEBUG_SCREENSHOT_TIMEOUT_MS", 5_000)
 
 
 def _resolve_caller_info() -> Tuple[Path, Optional[str]]:
@@ -81,6 +97,7 @@ async def capture_debug_screenshot(
     label: Optional[str] = None,
     subfolder: Optional[str] = None,
     full_page: bool = True,
+    timeout_ms: Optional[int] = None,
 ) -> Optional[Path]:
     """Capture a screenshot next to the caller file when debug is enabled.
 
@@ -92,9 +109,13 @@ async def capture_debug_screenshot(
         subfolder: Optional override for folder name inside caller directory. If not
             provided, the caller function name is used when available.
         full_page: Whether to capture the full scrollable page.
+        timeout_ms: Optional override for screenshot timeout in milliseconds. Defaults
+            to :data:`DEBUG_SCREENSHOT_TIMEOUT_MS` when ``None``.
 
     Returns:
-        Path to the saved screenshot or ``None`` when disabled.
+        Path to the saved screenshot or ``None`` when disabled or when capturing
+        fails (in which case a ``.timeout.txt``/``.error.txt`` file with details is
+        written beside the expected screenshot).
     """
 
     toggle = DEBUG_SCREENSHOTS if enabled is None else enabled
@@ -117,10 +138,36 @@ async def capture_debug_screenshot(
 
     screenshot_path = _build_target_path(target_dir, label)
 
-    await page.screenshot(
-        path=str(screenshot_path),
-        full_page=full_page,
-        type="png",
-    )
+    screenshot_timeout = DEBUG_SCREENSHOT_TIMEOUT_MS
+    if timeout_ms is not None:
+        try:
+            screenshot_timeout = max(0, int(timeout_ms))
+        except (TypeError, ValueError):
+            screenshot_timeout = DEBUG_SCREENSHOT_TIMEOUT_MS
+
+    try:
+        await page.screenshot(
+            path=str(screenshot_path),
+            full_page=full_page,
+            type="png",
+            timeout=float(screenshot_timeout),
+            animations="disabled",
+        )
+    except PlaywrightTimeoutError as exc:
+        failure_path = screenshot_path.with_suffix(".timeout.txt")
+        failure_path.write_text(
+            f"Screenshot timeout after {screenshot_timeout} ms: {exc}\n",
+            encoding="utf-8",
+        )
+        logger.debug("Debug screenshot timed out after %sms: %s", screenshot_timeout, exc)
+        return None
+    except PlaywrightError as exc:
+        failure_path = screenshot_path.with_suffix(".error.txt")
+        failure_path.write_text(
+            f"Failed to capture screenshot: {exc}\n",
+            encoding="utf-8",
+        )
+        logger.debug("Debug screenshot failed: %s", exc)
+        return None
 
     return screenshot_path
