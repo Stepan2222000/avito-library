@@ -6,7 +6,7 @@ from typing import Tuple
 
 from playwright.async_api import Page
 
-from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 from .solve_slider_once import solve_slider_once
 from ..utils import press_continue_and_detect

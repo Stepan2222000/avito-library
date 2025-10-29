@@ -8,7 +8,7 @@ from typing import Mapping, Optional
 
 from playwright.async_api import Page
 
-from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 from ..detectors import (
     detect_page_state,

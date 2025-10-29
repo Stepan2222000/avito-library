@@ -19,7 +19,7 @@ from typing import Any, Awaitable, Callable, Sequence
 
 from playwright.async_api import Page
 
-from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 from ..config import MAX_PAGE
 

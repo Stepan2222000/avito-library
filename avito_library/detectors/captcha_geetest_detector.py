@@ -18,7 +18,7 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page
 
-from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 __all__ = [
     "DETECTOR_ID",
