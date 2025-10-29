@@ -7,6 +7,8 @@ from typing import Final
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = ["DETECTOR_ID", "BUTTON_SELECTOR", "continue_button_detector"]
 
 DETECTOR_ID: Final[str] = "continue_button_detector"
@@ -22,6 +24,11 @@ async def continue_button_detector(page: Page) -> str | bool:
                 await asyncio.sleep(0.2)
                 continue
             if await button.first.is_visible():
+                await capture_debug_screenshot(
+                    page,
+                    enabled=DEBUG_SCREENSHOTS,
+                    label="detector-continue-button",
+                )
                 return DETECTOR_ID
             await asyncio.sleep(0.2)
     except PlaywrightError:

@@ -7,6 +7,8 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = [
     "DETECTOR_ID",
     "CatalogEmptyError",
@@ -58,6 +60,11 @@ async def catalog_page_detector(
         "Catalog page detected: container=%s items=%d",
         CATALOG_CONTAINER_SELECTOR,
         items_count,
+    )
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label=f"detector-catalog-{items_count}",
     )
     return DETECTOR_ID
 

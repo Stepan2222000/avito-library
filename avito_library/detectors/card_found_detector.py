@@ -7,6 +7,8 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = ["DETECTOR_ID", "SELECTOR", "card_found_detector"]
 
 DETECTOR_ID: Final[str] = "card_found_detector"
@@ -27,6 +29,11 @@ async def card_found_detector(
             return False
         if await locator.first.is_visible():
             log.info("Listing card detected via selector %s", SELECTOR)
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label="detector-card-found",
+            )
             return DETECTOR_ID
     except PlaywrightError:
         return False

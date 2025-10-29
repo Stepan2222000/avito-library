@@ -6,6 +6,8 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page, Response
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = [
     "DETECTOR_ID",
     "CARD_SELECTOR",
@@ -42,6 +44,11 @@ async def proxy_block_403_detector(
 
     status = getattr(last_response, "status", None)
     if status == 403:
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label="detector-proxy-403-status",
+        )
         return DETECTOR_ID
 
     if await _has_selector(page, CARD_SELECTOR):
@@ -58,6 +65,11 @@ async def proxy_block_403_detector(
 
     # Даже при ответах 200/206 страница содержит тот же текст, поэтому считаем
     # прокси заблокированным, как только набор фраз совпадает полностью.
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label="detector-proxy-403",
+    )
     return DETECTOR_ID
 
 

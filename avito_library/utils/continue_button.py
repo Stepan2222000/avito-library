@@ -8,6 +8,8 @@ from typing import Mapping, Optional
 
 from playwright.async_api import Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 from ..detectors import (
     detect_page_state,
     CAPTCHA_DETECTOR_ID,
@@ -55,6 +57,11 @@ async def press_continue_and_detect(
         )
 
         if initial_state != _CONTINUE_STATE:
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label=f"continue-initial-{initial_state}",
+            )
             return initial_state
 
     button = page.locator('button[name="submit"]')
@@ -74,6 +81,11 @@ async def press_continue_and_detect(
         )
         print(state)
         if state == _CAPTCHA_STATE:
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label="continue-captcha",
+            )
             return state
         if state == _CONTINUE_STATE:
             if attempts >= max_retries:
@@ -82,8 +94,23 @@ async def press_continue_and_detect(
             for i in range(5):
                 await button.click(force=True)
             attempts += 1
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label=f"continue-repeat-{attempts}",
+            )
             continue
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label=f"continue-state-{state}",
+        )
         return state
 
     state = await detect_page_state(page, detector_kwargs=detector_kwargs)
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label=f"continue-final-{state}",
+    )
     return state

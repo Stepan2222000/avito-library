@@ -18,6 +18,8 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = [
     "DETECTOR_ID",
     "DEFAULT_WAIT_TIMEOUT",
@@ -77,6 +79,11 @@ async def captcha_geetest_detector(
     while True:
         if await _all_selectors_present(page):
             log.info("Geetest captcha detected via selectors: %s", REQUIRED_SELECTORS)
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label="detector-captcha",
+            )
             return DETECTOR_ID
 
         if time.monotonic() >= deadline:

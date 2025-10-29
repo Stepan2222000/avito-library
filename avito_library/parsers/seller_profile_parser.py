@@ -19,6 +19,8 @@ from typing import Any, Awaitable, Callable, Sequence
 
 from playwright.async_api import Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 from ..config import MAX_PAGE
 
 from ..capcha.resolver import resolve_captcha_flow
@@ -130,6 +132,12 @@ async def collect_seller_items(
                 "is_complete": False,
             }
 
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label=f"seller-state-initial-{state}",
+    )
+
     seller_html: str | None = None
 
     if state == SELLER_PROFILE_DETECTOR_ID:
@@ -147,6 +155,11 @@ async def collect_seller_items(
                 "pages_collected": pages_collected,
                 "is_complete": False,
             }
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label=f"seller-state-after-captcha-{state}",
+        )
         if state != SELLER_PROFILE_DETECTOR_ID:
             return {
                 "state": state,
@@ -162,6 +175,11 @@ async def collect_seller_items(
             seller_html = await page.content()
             state = SELLER_PROFILE_DETECTOR_ID
         else:
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label=f"seller-unexpected-{state}",
+            )
             # Передаём внешний детектор как признак того, что собрать данные не удалось.
             return {
                 "state": state,
@@ -175,6 +193,11 @@ async def collect_seller_items(
     try:
         seller_id = _extract_seller_id(seller_html)
     except SellerIdNotFound:
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label="seller-id-not-found",
+        )
         return {
             "state": "seller_id_not_found",
             "seller_name": seller_name,
@@ -235,6 +258,11 @@ async def collect_seller_items(
         ]
     if schema_by_id is not None:
         response["items_by_id"] = schema_by_id
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label="seller-finish",
+    )
     return response
 
 

@@ -6,6 +6,8 @@ from typing import Final
 
 from playwright.async_api import Error as PlaywrightError, Page
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = [
     "DETECTOR_ID",
     "TABS_SELECTOR",
@@ -46,5 +48,10 @@ async def seller_profile_detector(page: Page) -> str | bool:
         return False
 
     if name_text.strip():
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label="detector-seller-profile",
+        )
         return DETECTOR_ID
     return False

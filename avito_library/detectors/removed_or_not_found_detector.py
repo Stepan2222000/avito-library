@@ -6,6 +6,8 @@ from typing import Final, Optional
 
 from playwright.async_api import Error as PlaywrightError, Page, Response
 
+from debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
+
 __all__ = [
     "DETECTOR_ID",
     "REMOVED_SELECTORS",
@@ -41,9 +43,19 @@ async def removed_or_not_found_detector(
 
     status = getattr(last_response, "status", None)
     if status in {404, 410}:
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label=f"detector-removed-status-{status}",
+        )
         return DETECTOR_ID
 
     if await _any_selector_present(page, REMOVED_SELECTORS):
+        await capture_debug_screenshot(
+            page,
+            enabled=DEBUG_SCREENSHOTS,
+            label="detector-removed-selector",
+        )
         return DETECTOR_ID
 
     html = await _safe_page_content(page)
@@ -53,6 +65,11 @@ async def removed_or_not_found_detector(
     lowered = html.lower()
     for phrase in REMOVED_PHRASES:
         if phrase in lowered:
+            await capture_debug_screenshot(
+                page,
+                enabled=DEBUG_SCREENSHOTS,
+                label="detector-removed-phrase",
+            )
             return DETECTOR_ID
 
     return False
