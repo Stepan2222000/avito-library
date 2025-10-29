@@ -130,7 +130,7 @@ if __name__ == "__main__":
   - `REMOVED_DETECTOR_ID` — объявление снято или удалено.
 
 ### Утилита «Продолжить» (`avito_library.utils.press_continue_and_detect`)
-- `press_continue_and_detect(page: Page, *, skip_initial_detector=False, detector_kwargs=None, max_retries=10, wait_timeout=30.0) -> str`  
+- `press_continue_and_detect(page: Page, *, skip_initial_detector=False, detector_kwargs=None, max_retries=10, wait_timeout=30.0, last_response=None) -> str`  
   Имитация ручного нажатия кнопки «Продолжить» с повторным детектом состояния.  
   Логика:
   1. По умолчанию сначала вызывается `detect_page_state` с собственным приоритетом, чтобы избежать лишних кликов.

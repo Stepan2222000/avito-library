@@ -6,7 +6,7 @@ import asyncio
 import time
 from typing import Mapping, Optional
 
-from playwright.async_api import Page
+from playwright.async_api import Page, Response
 
 from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
@@ -46,6 +46,7 @@ async def press_continue_and_detect(
     detector_kwargs: Optional[Mapping[str, Mapping[str, object]]] = None,
     max_retries: int = 10,
     wait_timeout: float = 30.0,
+    last_response: Optional[Response] = None,
 ) -> str:
     """Press "Continue" button and detect resulting page state."""
 
@@ -54,7 +55,9 @@ async def press_continue_and_detect(
             page,
             priority=_PRIORITY_ORDER,
             detector_kwargs=detector_kwargs,
+            last_response=last_response,
         )
+        last_response = None
 
         if initial_state != _CONTINUE_STATE:
             await capture_debug_screenshot(

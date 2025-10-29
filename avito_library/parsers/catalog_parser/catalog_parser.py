@@ -11,6 +11,7 @@ from ...capcha.resolver import resolve_captcha_flow
 from ...detectors import (
     CATALOG_DETECTOR_ID,
     CAPTCHA_DETECTOR_ID,
+    CONTINUE_BUTTON_DETECTOR_ID,
     PROXY_AUTH_DETECTOR_ID,
     PROXY_BLOCK_403_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
@@ -86,7 +87,7 @@ async def parse_catalog(
     while next_url and (max_pages is None or processed_pages < max_pages):
         current_url = next_url
         try:
-            await page.goto(
+            response = await page.goto(
                 current_url,
                 wait_until="domcontentloaded",
                 timeout=LOAD_TIMEOUT,
@@ -98,7 +99,7 @@ async def parse_catalog(
             break
 
         try:
-            state = await press_continue_and_detect(page)
+            state = await press_continue_and_detect(page, last_response=response)
         except DetectionError:
             status = CatalogParseStatus.INVALID_STATE
             details = "Failed to detect page state after pressing continue."
@@ -122,13 +123,14 @@ async def parse_catalog(
                 last_state = state
                 break
         else:
-            try:
-                state = await detect_page_state(page)
-            except DetectionError:
-                status = CatalogParseStatus.INVALID_STATE
-                details = "No detector matched current page state."
-                last_state = "detection_error"
-                break
+            if state == CONTINUE_BUTTON_DETECTOR_ID:
+                try:
+                    state = await detect_page_state(page)
+                except DetectionError:
+                    status = CatalogParseStatus.INVALID_STATE
+                    details = "No detector matched current page state."
+                    last_state = "detection_error"
+                    break
 
         last_state = state
         if state == CATALOG_DETECTOR_ID:
