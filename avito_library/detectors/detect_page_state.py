@@ -12,6 +12,7 @@ from . import (
     DETECTOR_FUNCTIONS,
     DETECTOR_WAIT_TIMEOUT_RESOLVERS,
 )
+from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 __all__ = ["DetectionError", "detect_page_state"]
 
@@ -118,6 +119,11 @@ async def detect_page_state(
         if result:
             return detector_id if result is True else str(result)
 
+    await capture_debug_screenshot(
+        page,
+        enabled=DEBUG_SCREENSHOTS,
+        label="detect-page-state-no-match",
+    )
     raise DetectionError("No detector matched current page state")
 
 

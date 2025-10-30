@@ -20,7 +20,9 @@ __all__ = [
 DETECTOR_ID: Final[str] = "seller_profile_detector"
 TABS_SELECTOR: Final[str] = 'div[data-marker="extended_profile_tabs"]'
 PROFILE_CONTAINER_SELECTOR: Final[str] = 'div[data-marker="profile"]'
-PROFILE_SCORE_SELECTOR: Final[str] = 'span[data-marker="profile/score"]'
+PROFILE_SCORE_SELECTOR: Final[str] = (
+    '[data-marker="profile/summary"]'
+)
 NAME_SELECTOR: Final[str] = 'h1[data-marker^="name "]'
 
 
@@ -36,6 +38,7 @@ async def seller_profile_detector(page: Page) -> str | bool:
         if not profile_present:
             return False
 
+        # Score/summary block might render either as summary link or score span across layouts.
         score_present = await page.locator(PROFILE_SCORE_SELECTOR).count() > 0
         if not score_present:
             return False
