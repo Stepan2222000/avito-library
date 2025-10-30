@@ -38,7 +38,6 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
         back_url = re.findall(r'url\("(.*?)"\)', back_elem)[0]
         pi_top = float(re.findall(r"top: (.*?)px;", pi_style)[0])
     except (IndexError, ValueError) as exc:
-        print("5")
         raise RuntimeError(f"style-parse:{exc}") from exc
 
     try:
@@ -46,14 +45,13 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
         pi_content = await page.request.get(pi_url, fail_on_status_code=True)
         back_body = await back_content.body()
         pi_body = await pi_content.body()
-    except Exception as exc:  # noqa: BLE001
-        print("6")
-        raise RuntimeError(f"image-fetch:{exc}") from exc
 
+    except Exception as exc:  # noqa: BLE001
+
+        raise RuntimeError(f"image-fetch:{exc}") from exc
     h_content = calculate_hash(back_body, pi_body)
     cache_entry: dict[str, Any] | None = await get_offset(h_content)
     used_cached_offset = cache_entry is not None
-    print(cache_entry)
     if cache_entry is None:
         base_offset = calculate_offset(back_body, pi_body, pi_top)
         definitely_known = False
