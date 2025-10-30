@@ -17,7 +17,19 @@ async def load_cache() -> Dict[str, Dict[str, Any]]:
         return {}
     text = await asyncio.to_thread(CACHE_PATH.read_text, "utf-8")
     raw = json.loads(text)
-    filtered = [item for item in raw if item.get("definitely")]
+    filtered = []
+    for item in raw:
+        if not item.get("definitely"):
+            continue
+        normalized = {
+            "h_content": item.get("h_content"),
+            "offset": item.get("offset"),
+            "definitely": True,
+            "fail_count": int(item.get("fail_count", 0) or 0),
+        }
+        if not normalized["h_content"]:
+            continue
+        filtered.append(normalized)
     return {item["h_content"]: item for item in filtered}
 
 

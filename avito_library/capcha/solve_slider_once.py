@@ -5,11 +5,16 @@ from __future__ import annotations
 import time
 import re
 from typing import Any
-import asyncio
+
 from playwright.async_api import Page, TimeoutError
 
 from .solver_utils import calculate_hash, calculate_offset
-from .cache_manager import get_offset, update_offset
+from .cache_manager import (
+    FAILURE_THRESHOLD,
+    get_offset,
+    record_failure,
+    update_offset,
+)
 __all__ = ["solve_slider_once"]
 
 
@@ -47,6 +52,7 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
 
     h_content = calculate_hash(back_body, pi_body)
     cache_entry: dict[str, Any] | None = await get_offset(h_content)
+    used_cached_offset = cache_entry is not None
     print(cache_entry)
     if cache_entry is None:
         base_offset = calculate_offset(back_body, pi_body, pi_top)
@@ -66,12 +72,8 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"track-error:{exc}") from exc
 
-
-  
     if geetest_btn_box is None:
         raise RuntimeError("bbox-none")
-
-
 
     move_offset = base_offset + 37
     await page.mouse.move(
@@ -99,9 +101,19 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
             break
 
     if solved:
-        if not definitely_known or cache_entry is None:
-            await update_offset(h_content, offset=base_offset, definitely=True)
+        await update_offset(
+            h_content,
+            offset=base_offset,
+            definitely=True,
+            fail_count=0,
+        )
         return page_html, True
 
     failure_html = await page.content()
+    if used_cached_offset:
+        removed = await record_failure(h_content)
+        if removed:
+            print(
+                f"[captcha-cache] removed cached offset {h_content} after {FAILURE_THRESHOLD} consecutive failures",
+            )
     return failure_html, False
