@@ -114,8 +114,8 @@ if __name__ == "__main__":
   - `priority`: Sequence[str] — собственный порядок обхода. Переданные идентификаторы будут проверены раньше дефолтного порядка.
   - `detector_kwargs`: Mapping[str, Mapping[str, object]] — дополнительные аргументы для отдельных детекторов (например, таймауты капчи).
   - `last_response`: Response | None — последний HTTP-ответ Playwright; нужен детекторам, которые анализируют статус-коды.
-  Возвращает строковый идентификатор детектора (например, `catalog_page_detector`). Выбрасывает `DetectionError`, если ни один детектор не сработал или переданы неизвестные идентификаторы.
-- `DetectionError` — лучше ловить вокруг вызовов навигации и логировать пустой HTML, чтобы диагностировать новые состояния.
+  Возвращает строковый идентификатор детектора (например, `catalog_page_detector`). Если ни один детектор не сработал, вернётся `NOT_DETECTED_STATE_ID`. `DetectionError` выбрасывается при некорректной конфигурации (`skip`/`priority`/`detector_kwargs`).
+- `DetectionError` — отлавливайте вокруг навигации, чтобы фиксировать проблемы конфигурации и сохранять HTML для диагностики.
 - Регистры:
   - `DETECTOR_FUNCTIONS` — словарь `id -> coroutine`.
   - `DETECTOR_DEFAULT_ORDER` — последовательность, описывающая стандартный приоритет (блокировки → капча → каталог → карточка → continue).
@@ -128,6 +128,7 @@ if __name__ == "__main__":
   - `SELLER_PROFILE_DETECTOR_ID` — профиль продавца.
   - `PROXY_BLOCK_403_DETECTOR_ID` / `PROXY_BLOCK_429_DETECTOR_ID` / `PROXY_AUTH_DETECTOR_ID` — разные варианты блокировок прокси.
   - `REMOVED_DETECTOR_ID` — объявление снято или удалено.
+  - `NOT_DETECTED_STATE_ID` — ни один детектор не распознал состояние страницы.
 
 ### Утилита «Продолжить» (`avito_library.utils.press_continue_and_detect`)
 - `press_continue_and_detect(page: Page, *, skip_initial_detector=False, detector_kwargs=None, max_retries=10, wait_timeout=30.0, last_response=None) -> str`  
@@ -165,7 +166,7 @@ if __name__ == "__main__":
   - При получении статуса `CatalogParseStatus.CAPTCHA_UNSOLVED` имеет смысл вызвать `resolve_captcha_flow` и повторить запрос.
 - `CatalogListing` — модель карточки каталога (ID, заголовок, цена, продавец, промометки, HTML).
 - `CatalogParseMeta` — содержит статус, количество обработанных страниц/карточек, последний URL и текстовые детали.
-- `CatalogParseStatus` — перечисление возможных исходов (`SUCCESS`, `EMPTY`, `RATE_LIMIT`, `PROXY_BLOCKED` и т. д.).
+- `CatalogParseStatus` — перечисление возможных исходов (`SUCCESS`, `EMPTY`, `RATE_LIMIT`, `PROXY_BLOCKED`, `NOT_DETECTED` и т. д.).
 - Потоковый режим:
   - `parse_catalog_until_complete(...) -> CatalogParseResult` — выполняет многошаговый обход, автоматически дозапрашивая свежие страницы до успеха или исчерпания лимита.
   - `PageRequest` — объект, который оркестратор отправляет внешний системе, если нужна новая страница Playwright.

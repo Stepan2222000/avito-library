@@ -22,6 +22,7 @@ from .detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
+    NOT_DETECTED_STATE_ID,
     detect_page_state,
 )
 from .install_browser import install_playwright_chromium
@@ -48,6 +49,7 @@ __all__ = [
     "DETECTOR_DEFAULT_ORDER",
     "DETECTOR_WAIT_TIMEOUT_RESOLVERS",
     "CAPTCHA_DETECTOR_ID",
+    "NOT_DETECTED_STATE_ID",
     "CARD_FOUND_DETECTOR_ID",
     "CATALOG_DETECTOR_ID",
     "CONTINUE_BUTTON_DETECTOR_ID",

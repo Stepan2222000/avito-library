@@ -14,6 +14,7 @@ from ..detectors import (
     detect_page_state,
     CAPTCHA_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
+    NOT_DETECTED_STATE_ID,
 )
 __all__ = ["resolve_captcha_flow"]
 
@@ -23,6 +24,7 @@ _BLOCKING_STATES = {
     _CAPTCHA_STATE,
     _CONTINUE_STATE,
     PROXY_BLOCK_429_DETECTOR_ID,
+    NOT_DETECTED_STATE_ID,
 }
 
 

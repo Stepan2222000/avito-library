@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from logging import Logger
-from typing import Awaitable, Callable, Dict, Iterable, Mapping, MutableSequence, Optional, Sequence
+from typing import Awaitable, Callable, Dict, Iterable, Mapping, MutableSequence, Optional, Sequence, Final
 
 from playwright.async_api import Page, Response
 
@@ -14,7 +14,7 @@ from . import (
 )
 from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
-__all__ = ["DetectionError", "detect_page_state"]
+__all__ = ["DetectionError", "detect_page_state", "NOT_DETECTED_STATE_ID"]
 
 
 class DetectionError(RuntimeError):
@@ -26,6 +26,7 @@ DetectorFn = Callable[[], Awaitable[DetectorResult]]
 
 
 DEFAULT_ORDER: Sequence[str] = DETECTOR_DEFAULT_ORDER
+NOT_DETECTED_STATE_ID: Final[str] = "not_detected"
 
 
 async def detect_page_state(
@@ -112,8 +113,6 @@ async def detect_page_state(
         if detector is None:
             raise ValueError(f"Detector {detector_id} is not registered")
 
-        result = await detector()
-        
 
         result = await detector()
         if result:
@@ -124,7 +123,7 @@ async def detect_page_state(
         enabled=DEBUG_SCREENSHOTS,
         label="detect-page-state-no-match",
     )
-    raise DetectionError("No detector matched current page state")
+    return NOT_DETECTED_STATE_ID
 
 
 def _get_float_kwarg(

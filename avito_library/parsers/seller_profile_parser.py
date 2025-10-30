@@ -29,6 +29,7 @@ from ..detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
     detect_page_state,
+    NOT_DETECTED_STATE_ID,
 )
 from ..detectors.detect_page_state import DetectionError
 from ..detectors.seller_profile_detector import NAME_SELECTOR
@@ -132,6 +133,20 @@ async def collect_seller_items(
                 "is_complete": False,
             }
 
+    if state == NOT_DETECTED_STATE_ID:
+        if await _looks_like_profile(page):
+            logger.debug("Fallback profile detection triggered after not_detected state")
+            state = SELLER_PROFILE_DETECTOR_ID
+        else:
+            logger.error("Seller profile detector returned not_detected state")
+            return {
+                "state": NOT_DETECTED_STATE_ID,
+                "seller_name": None,
+                "item_ids": item_ids,
+                "pages_collected": pages_collected,
+                "is_complete": False,
+            }
+
     await capture_debug_screenshot(
         page,
         enabled=DEBUG_SCREENSHOTS,
@@ -160,6 +175,18 @@ async def collect_seller_items(
             enabled=DEBUG_SCREENSHOTS,
             label=f"seller-state-after-captcha-{state}",
         )
+        if state == NOT_DETECTED_STATE_ID:
+            if await _looks_like_profile(page):
+                logger.debug("Fallback profile detection triggered after captcha and not_detected state")
+                state = SELLER_PROFILE_DETECTOR_ID
+            else:
+                return {
+                    "state": NOT_DETECTED_STATE_ID,
+                    "seller_name": None,
+                    "item_ids": item_ids,
+                    "pages_collected": pages_collected,
+                    "is_complete": False,
+                }
         if state != SELLER_PROFILE_DETECTOR_ID:
             return {
                 "state": state,

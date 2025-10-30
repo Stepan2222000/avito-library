@@ -72,7 +72,7 @@ DETECTOR_WAIT_TIMEOUT_RESOLVERS: dict[str, Callable[..., float]] = {
     CAPTCHA_DETECTOR_ID: captcha_resolve_wait_timeout,
 }
 
-from .detect_page_state import detect_page_state, DetectionError  # noqa: E402
+from .detect_page_state import detect_page_state, DetectionError, NOT_DETECTED_STATE_ID  # noqa: E402
 
 __all__ = [
     "DETECTOR_FUNCTIONS",
@@ -80,6 +80,7 @@ __all__ = [
     "DETECTOR_WAIT_TIMEOUT_RESOLVERS",
     "detect_page_state",
     "DetectionError",
+    "NOT_DETECTED_STATE_ID",
     "CAPTCHA_DETECTOR_ID",
     "CARD_FOUND_DETECTOR_ID",
     "CATALOG_DETECTOR_ID",

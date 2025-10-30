@@ -16,6 +16,7 @@ class CatalogParseStatus(Enum):
     RATE_LIMIT = "rate_limit"
     PROXY_BLOCKED = "proxy_blocked"
     PROXY_AUTH_REQUIRED = "proxy_auth_required"
+    NOT_DETECTED = "not_detected"
     INVALID_STATE = "invalid_state"
     LOAD_FAILED = "load_failed"
 

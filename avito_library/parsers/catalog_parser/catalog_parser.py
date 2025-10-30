@@ -17,6 +17,7 @@ from ...detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     DetectionError,
     detect_page_state,
+    NOT_DETECTED_STATE_ID,
 )
 from ...utils import press_continue_and_detect
 from .helpers import (
@@ -105,6 +106,12 @@ async def parse_catalog(
             details = "Failed to detect page state after pressing continue."
             last_state = "detection_error"
             break
+
+        if state == NOT_DETECTED_STATE_ID:
+            status = CatalogParseStatus.NOT_DETECTED
+            details = "No detector matched page state after pressing continue."
+            last_state = state
+            break
         if state in {CAPTCHA_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID}:
             try:
                 state = await _attempt_captcha_resolution(page, initial_state=state)
@@ -130,6 +137,11 @@ async def parse_catalog(
                     status = CatalogParseStatus.INVALID_STATE
                     details = "No detector matched current page state."
                     last_state = "detection_error"
+                    break
+                if state == NOT_DETECTED_STATE_ID:
+                    status = CatalogParseStatus.NOT_DETECTED
+                    details = "No detector matched current page state after continue button."
+                    last_state = state
                     break
 
         last_state = state
@@ -164,6 +176,12 @@ async def parse_catalog(
                 next_url = candidate_url
 
             continue
+
+        if state == NOT_DETECTED_STATE_ID:
+            status = CatalogParseStatus.NOT_DETECTED
+            details = "Encountered not_detected state while parsing catalog page."
+            last_state = state
+            break
 
         if state == PROXY_BLOCK_403_DETECTOR_ID:
             status = CatalogParseStatus.PROXY_BLOCKED
