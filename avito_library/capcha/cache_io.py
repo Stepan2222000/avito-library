@@ -27,6 +27,7 @@ if _STORAGE_MODE not in _VALID_STORAGE_MODES:
     )
 
 _POSTGRES_TABLE = getattr(db_data, "POSTGRES_TABLE_NAME", "geetest_cache")
+_POSTGRES_OFFSET_COLUMN = getattr(db_data, "POSTGRES_OFFSET_COLUMN", "offset_px")
 if _STORAGE_MODE == "postgres":
     if not isinstance(_POSTGRES_TABLE, str) or not re.fullmatch(
         r"[A-Za-z_][A-Za-z0-9_]*",
@@ -34,6 +35,14 @@ if _STORAGE_MODE == "postgres":
     ):
         raise ValueError(
             f"Invalid PostgreSQL table name '{_POSTGRES_TABLE}'. "
+            "Use alphanumeric characters and underscores only.",
+        )
+    if not isinstance(_POSTGRES_OFFSET_COLUMN, str) or not re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*",
+        _POSTGRES_OFFSET_COLUMN,
+    ):
+        raise ValueError(
+            f"Invalid PostgreSQL column name '{_POSTGRES_OFFSET_COLUMN}'. "
             "Use alphanumeric characters and underscores only.",
         )
 
@@ -166,7 +175,7 @@ async def _save_cache_json(cache: Dict[str, Dict[str, Any]]) -> None:
 async def _load_cache_postgres() -> Dict[str, Dict[str, Any]]:
     pool = await _get_pool()
     query = (
-        f"SELECT h_content, offset, definitely, fail_count "
+        f"SELECT h_content, {_POSTGRES_OFFSET_COLUMN} AS offset, definitely, fail_count "
         f"FROM {_POSTGRES_TABLE} WHERE definitely IS TRUE"
     )
     async with pool.acquire() as conn:
@@ -196,7 +205,7 @@ async def _save_cache_postgres(cache: Dict[str, Dict[str, Any]]) -> None:
 async def _fetch_entry_postgres(hash_key: str) -> Optional[Dict[str, Any]]:
     pool = await _get_pool()
     query = (
-        f"SELECT h_content, offset, definitely, fail_count "
+        f"SELECT h_content, {_POSTGRES_OFFSET_COLUMN} AS offset, definitely, fail_count "
         f"FROM {_POSTGRES_TABLE} WHERE h_content = $1"
     )
     async with pool.acquire() as conn:
@@ -209,10 +218,11 @@ async def _fetch_entry_postgres(hash_key: str) -> Optional[Dict[str, Any]]:
 async def _upsert_entry_postgres(entry: Dict[str, Any]) -> None:
     pool = await _get_pool()
     insert_sql = (
-        f"INSERT INTO {_POSTGRES_TABLE} (h_content, offset, definitely, fail_count) "
+        f"INSERT INTO {_POSTGRES_TABLE} (h_content, {_POSTGRES_OFFSET_COLUMN}, definitely, fail_count) "
         "VALUES ($1, $2, $3, $4) "
         "ON CONFLICT (h_content) DO UPDATE "
-        "SET offset = EXCLUDED.offset, definitely = EXCLUDED.definitely, fail_count = EXCLUDED.fail_count"
+        f"SET {_POSTGRES_OFFSET_COLUMN} = EXCLUDED.{_POSTGRES_OFFSET_COLUMN}, "
+        "definitely = EXCLUDED.definitely, fail_count = EXCLUDED.fail_count"
     )
     async with pool.acquire() as conn:
         await conn.execute(
@@ -258,7 +268,7 @@ async def _get_pool() -> "asyncpg.Pool":
     create_sql = (
         f"CREATE TABLE IF NOT EXISTS {_POSTGRES_TABLE} ("
         "h_content TEXT PRIMARY KEY,"
-        "offset INTEGER NOT NULL,"
+        f"{_POSTGRES_OFFSET_COLUMN} INTEGER NOT NULL,"
         "definitely BOOLEAN NOT NULL DEFAULT FALSE,"
         "fail_count INTEGER NOT NULL DEFAULT 0"
         ")"

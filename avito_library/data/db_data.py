@@ -5,7 +5,7 @@ from __future__ import annotations
 # Storage backend mode:
 #   - "json": keep using the local geetest_cache.json file
 #   - "postgres": persist offsets in the configured PostgreSQL table
-STORAGE_MODE: str = "postgres"
+STORAGE_MODE: str = "json"
 
 # PostgreSQL connection parameters used when STORAGE_MODE == "postgres".
 POSTGRES_CONFIG: dict[str, object] = {
@@ -22,3 +22,6 @@ POSTGRES_POOL_MAX_SIZE: int = 50
 
 # Destination table for storing captcha offsets.
 POSTGRES_TABLE_NAME: str = "geetest_cache"
+
+# Column name for storing the calculated offset; keep alphanumeric/underscore only.
+POSTGRES_OFFSET_COLUMN: str = "offset_px"

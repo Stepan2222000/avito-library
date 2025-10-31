@@ -6,17 +6,16 @@ import re
 from typing import Tuple
 from urllib.parse import parse_qsl, urljoin, urlencode, urlparse, urlunparse
 
-from playwright.async_api import Locator, Page, TimeoutError
+from playwright.async_api import Locator, Page
 
 from ...detectors.catalog_page_detector import CATALOG_ITEM_SELECTOR
 from .models import CatalogListing
 
 CATALOG_CARD_SELECTOR = CATALOG_ITEM_SELECTOR
 NEXT_PAGE_SELECTOR = 'a[data-marker="pagination-button/nextPage"]'
-SCROLL_ATTEMPTS = 10
-SCROLL_DELAY_MS = 500
-NETWORK_IDLE_TIMEOUT = 5_000
-NETWORK_IDLE_FALLBACK_MS = 2_000
+SCROLL_ATTEMPTS = 1
+SCROLL_DELAY_MS = 200
+SCROLL_SETTLE_MS = 400
 PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
 SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
@@ -69,21 +68,14 @@ async def load_catalog_cards(page: Page) -> list[Locator]:
 
     while attempts < SCROLL_ATTEMPTS:
         attempts += 1
-        try:
-            await page.wait_for_timeout(SCROLL_DELAY_MS)
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(SCROLL_DELAY_MS)
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await page.wait_for_timeout(SCROLL_SETTLE_MS)
 
-            try:
-                await page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT)
-            except TimeoutError:
-                await page.wait_for_timeout(NETWORK_IDLE_FALLBACK_MS)
-
-            current_count = await catalog_locator.count()
-            if current_count == previous_count:
-                break
-            previous_count = current_count
-        except TimeoutError:
+        current_count = await catalog_locator.count()
+        if current_count == previous_count:
             break
+        previous_count = current_count
 
     cards = await catalog_locator.all()
     filtered: list[Locator] = []

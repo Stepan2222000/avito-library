@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import re
 from typing import Any
@@ -21,10 +22,21 @@ __all__ = ["solve_slider_once"]
 async def solve_slider_once(page: Page) -> tuple[str, bool]:
     """Perform one attempt to solve Geetest slider captcha."""
 
+    preferred_index = 4
+
+    async def _style_for(selector: str) -> str | None:
+        locator = page.locator(selector)
+        count = await locator.count()
+        if count == 0:
+            return None
+        idx = min(preferred_index, count - 1)
+        return await locator.nth(idx).get_attribute("style")
+
     try:
-        pi_elem = await page.locator("div.geetest_slice_bg").first.get_attribute("style")
-        back_elem = await page.locator("div.geetest_bg").first.get_attribute("style")
-        pi_style = await page.locator("div.geetest_slice").first.get_attribute("style")
+        pi_elem = await _style_for("div.geetest_slice_bg")
+        back_elem = await _style_for("div.geetest_bg")
+        pi_style = await _style_for("div.geetest_slice")
+
     except TimeoutError as exc:
         raise RuntimeError("style-timeout") from exc
     except Exception as exc:  # noqa: BLE001
@@ -41,6 +53,8 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
         raise RuntimeError(f"style-parse:{exc}") from exc
 
     try:
+        print("back_url", back_url)
+        print("pi_url", pi_url)
         back_content = await page.request.get(back_url, fail_on_status_code=True)
         pi_content = await page.request.get(pi_url, fail_on_status_code=True)
         back_body = await back_content.body()
@@ -74,13 +88,15 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
         raise RuntimeError("bbox-none")
 
     move_offset = base_offset + 37
+
     await page.mouse.move(
         geetest_btn_box["x"] + move_offset,
         geetest_btn_box["y"],
     )
+    await asyncio.sleep(2)
     await page.mouse.up()
 
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 2.0
     solved = False
     page_html = ""
 

@@ -71,12 +71,11 @@ async def press_continue_and_detect(
     for i in range(5):
         await button.click(force=True)
 
-
+    await asyncio.sleep(5)
     attempts = 0
     deadline = time.monotonic() + wait_timeout
 
     while time.monotonic() < deadline:
-        await asyncio.sleep(10)
         state = await detect_page_state(
             page,
             priority=_PRIORITY_ORDER,
@@ -93,9 +92,9 @@ async def press_continue_and_detect(
         if state == _CONTINUE_STATE:
             if attempts >= max_retries:
                 break
-            print("выполни клики")
             for i in range(5):
                 await button.click(force=True)
+                print("клики сделаны")
             attempts += 1
             await capture_debug_screenshot(
                 page,

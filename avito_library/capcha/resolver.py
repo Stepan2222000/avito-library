@@ -28,7 +28,7 @@ _BLOCKING_STATES = {
 }
 
 
-async def resolve_captcha_flow(page: Page, *, max_attempts: int = 3) -> Tuple[str, bool]:
+async def resolve_captcha_flow(page: Page, *, max_attempts: int = 30) -> Tuple[str, bool]:
     """Attempt to resolve Geetest captcha by combining button presses, solver and detectors."""
 
     initial_state = await press_continue_and_detect(page)
