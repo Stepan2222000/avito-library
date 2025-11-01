@@ -94,7 +94,6 @@ async def press_continue_and_detect(
                 break
             for i in range(5):
                 await button.click(force=True)
-                print("клики сделаны")
             attempts += 1
             await capture_debug_screenshot(
                 page,

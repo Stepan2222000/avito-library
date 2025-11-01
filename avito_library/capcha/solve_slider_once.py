@@ -53,8 +53,6 @@ async def solve_slider_once(page: Page) -> tuple[str, bool]:
         raise RuntimeError(f"style-parse:{exc}") from exc
 
     try:
-        print("back_url", back_url)
-        print("pi_url", pi_url)
         back_content = await page.request.get(back_url, fail_on_status_code=True)
         pi_content = await page.request.get(pi_url, fail_on_status_code=True)
         back_body = await back_content.body()

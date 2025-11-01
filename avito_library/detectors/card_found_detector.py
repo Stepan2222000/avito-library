@@ -28,7 +28,7 @@ async def card_found_detector(
         if await locator.count() == 0:
             return False
         if await locator.first.is_visible():
-            log.info("Listing card detected via selector %s", SELECTOR)
+            # log.info("Listing card detected via selector %s", SELECTOR)
             await capture_debug_screenshot(
                 page,
                 enabled=DEBUG_SCREENSHOTS,

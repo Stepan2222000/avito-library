@@ -78,7 +78,7 @@ async def captcha_geetest_detector(
     # Perform an immediate check before sleeping to avoid unnecessary delay.
     while True:
         if await _all_selectors_present(page):
-            log.info("Geetest captcha detected via selectors: %s", REQUIRED_SELECTORS)
+            # log.info("Geetest captcha detected via selectors: %s", REQUIRED_SELECTORS)
             await capture_debug_screenshot(
                 page,
                 enabled=DEBUG_SCREENSHOTS,
