@@ -25,7 +25,6 @@ from .helpers import (
     apply_start_page,
     extract_listing,
     get_next_page_url,
-    has_empty_markers,
     load_catalog_cards,
 )
 from .models import (
@@ -112,7 +111,7 @@ async def parse_catalog(
             details = "No detector matched page state after pressing continue."
             last_state = state
             break
-        if state in {CAPTCHA_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID}:
+        if state in {CAPTCHA_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID, CONTINUE_BUTTON_DETECTOR_ID}:
             try:
                 state = await _attempt_captcha_resolution(page, initial_state=state)
             except DetectionError:
@@ -120,7 +119,7 @@ async def parse_catalog(
                 details = "Failed to resolve captcha or detect state afterwards."
                 last_state = "detection_error"
                 break
-            if state in {CAPTCHA_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID}:
+            if state in {CAPTCHA_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID, CONTINUE_BUTTON_DETECTOR_ID}:
                 status = (
                     CatalogParseStatus.CAPTCHA_UNSOLVED
                     if state == CAPTCHA_DETECTOR_ID
@@ -149,13 +148,8 @@ async def parse_catalog(
             processed_pages += 1
             cards = await load_catalog_cards(page)
             if not cards:
-                page_html = await page.content()
-                if has_empty_markers(page_html):
-                    status = CatalogParseStatus.EMPTY
-                    details = "Catalog page returned no items."
-                    break
-                status = CatalogParseStatus.INVALID_STATE
-                details = "Catalog page detected but no cards were collected."
+                status = CatalogParseStatus.EMPTY
+                details = "Catalog page returned no items."
                 break
 
             for card_locator in cards:
