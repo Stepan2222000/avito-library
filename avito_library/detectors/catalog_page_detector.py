@@ -51,11 +51,6 @@ async def catalog_page_detector(
     except PlaywrightError:
         return False
 
-    if items_count == 0:
-        raise CatalogEmptyError(
-            "Catalog detected but no items found inside the container.",
-        )
-
     log.info(
         "Catalog page detected: container=%s items=%d",
         CATALOG_CONTAINER_SELECTOR,
