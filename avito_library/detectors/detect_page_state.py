@@ -42,7 +42,9 @@ async def detect_page_state(
 
     # Check for loading spinner first, before any other detectors
     logger = _get_logger_kwarg(detector_kwargs, "loading_detector")
+
     loading_result = await loading_detector(page, logger=logger)
+    print("loading-detector")
     if loading_result:
         return "loading_detector" if loading_result is True else str(loading_result)
 
