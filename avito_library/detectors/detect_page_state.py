@@ -12,6 +12,7 @@ from . import (
     DETECTOR_FUNCTIONS,
     DETECTOR_WAIT_TIMEOUT_RESOLVERS,
 )
+from .loading_detector import loading_detector
 from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 __all__ = ["DetectionError", "detect_page_state", "NOT_DETECTED_STATE_ID"]
@@ -38,6 +39,12 @@ async def detect_page_state(
     last_response: Optional[Response] = None,
 ) -> str:
     """Returns the identifier of the first detector that matches the page state."""
+
+    # Check for loading spinner first, before any other detectors
+    logger = _get_logger_kwarg(detector_kwargs, "loading_detector")
+    loading_result = await loading_detector(page, logger=logger)
+    if loading_result:
+        return "loading_detector" if loading_result is True else str(loading_result)
 
     skip_set = set(skip or ())
 
