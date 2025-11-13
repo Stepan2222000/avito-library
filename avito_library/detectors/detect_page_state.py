@@ -13,7 +13,6 @@ from . import (
     DETECTOR_FUNCTIONS,
     DETECTOR_WAIT_TIMEOUT_RESOLVERS,
 )
-from .loading_detector import loading_detector
 from ..debug import DEBUG_SCREENSHOTS, capture_debug_screenshot
 
 __all__ = ["DetectionError", "detect_page_state", "NOT_DETECTED_STATE_ID"]
