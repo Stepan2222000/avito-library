@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from logging import Logger
 from typing import Awaitable, Callable, Dict, Iterable, Mapping, MutableSequence, Optional, Sequence, Final
 
@@ -30,7 +31,7 @@ DEFAULT_ORDER: Sequence[str] = DETECTOR_DEFAULT_ORDER
 NOT_DETECTED_STATE_ID: Final[str] = "not_detected"
 
 
-async def detect_page_state(
+async def _detect_once(
     page: Page,
     *,
     skip: Iterable[str] | None = None,
@@ -38,15 +39,10 @@ async def detect_page_state(
     detector_kwargs: Mapping[str, Mapping[str, object]] | None = None,
     last_response: Optional[Response] = None,
 ) -> str:
-    """Returns the identifier of the first detector that matches the page state."""
+    """Single detection attempt - returns the identifier of the first detector that matches the page state."""
 
     # Check for loading spinner first, before any other detectors
     logger = _get_logger_kwarg(detector_kwargs, "loading_detector")
-
-    loading_result = await loading_detector(page, logger=logger)
-    print("loading-detector")
-    if loading_result:
-        return "loading_detector" if loading_result is True else str(loading_result)
 
     skip_set = set(skip or ())
 
@@ -132,6 +128,40 @@ async def detect_page_state(
         enabled=DEBUG_SCREENSHOTS,
         label="detect-page-state-no-match",
     )
+    return NOT_DETECTED_STATE_ID
+
+
+async def detect_page_state(
+    page: Page,
+    *,
+    skip: Iterable[str] | None = None,
+    priority: Sequence[str] | None = None,
+    detector_kwargs: Mapping[str, Mapping[str, object]] | None = None,
+    last_response: Optional[Response] = None,
+) -> str:
+    """Returns the identifier of the first detector that matches the page state.
+
+    If no detector matches, retries up to 3 more times with 20 second delay between attempts.
+    """
+    max_retries = 3
+    retry_delay = 20  # seconds
+
+    for attempt in range(max_retries + 1):  # 1 initial + 3 retries = 4 total attempts
+        result = await _detect_once(
+            page,
+            skip=skip,
+            priority=priority,
+            detector_kwargs=detector_kwargs,
+            last_response=last_response,
+        )
+
+        if result != NOT_DETECTED_STATE_ID:
+            return result
+
+        # If not the last attempt, wait before retrying
+        if attempt < max_retries:
+            await asyncio.sleep(retry_delay)
+
     return NOT_DETECTED_STATE_ID
 
 
