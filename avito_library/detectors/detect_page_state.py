@@ -40,9 +40,6 @@ async def _detect_once(
 ) -> str:
     """Single detection attempt - returns the identifier of the first detector that matches the page state."""
 
-    # Check for loading spinner first, before any other detectors
-    logger = _get_logger_kwarg(detector_kwargs, "loading_detector")
-
     skip_set = set(skip or ())
 
     detectors: Dict[str, DetectorFn] = {}
