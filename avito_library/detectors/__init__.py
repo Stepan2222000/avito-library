@@ -21,10 +21,6 @@ from .continue_button_detector import (
     DETECTOR_ID as CONTINUE_BUTTON_DETECTOR_ID,
     continue_button_detector,
 )
-from .loading_detector import (
-    DETECTOR_ID as LOADING_DETECTOR_ID,
-    loading_detector,
-)
 from .proxy_auth_407_detector import (
     DETECTOR_ID as PROXY_AUTH_DETECTOR_ID,
     proxy_auth_407_detector,
@@ -52,7 +48,6 @@ DETECTOR_FUNCTIONS: dict[str, DetectorCallable] = {
     PROXY_BLOCK_403_DETECTOR_ID: proxy_block_403_detector,
     PROXY_BLOCK_429_DETECTOR_ID: proxy_block_429_detector,
     PROXY_AUTH_DETECTOR_ID: proxy_auth_407_detector,
-    LOADING_DETECTOR_ID: loading_detector,
     REMOVED_DETECTOR_ID: removed_or_not_found_detector,
     SELLER_PROFILE_DETECTOR_ID: seller_profile_detector,
     CATALOG_DETECTOR_ID: catalog_page_detector,
@@ -65,7 +60,6 @@ DETECTOR_DEFAULT_ORDER: tuple[str, ...] = (
     PROXY_BLOCK_403_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
     PROXY_AUTH_DETECTOR_ID,
-    LOADING_DETECTOR_ID,  # High priority: detect loading state early
     CAPTCHA_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
@@ -91,7 +85,6 @@ __all__ = [
     "CARD_FOUND_DETECTOR_ID",
     "CATALOG_DETECTOR_ID",
     "CONTINUE_BUTTON_DETECTOR_ID",
-    "LOADING_DETECTOR_ID",
     "PROXY_AUTH_DETECTOR_ID",
     "PROXY_BLOCK_403_DETECTOR_ID",
     "PROXY_BLOCK_429_DETECTOR_ID",
