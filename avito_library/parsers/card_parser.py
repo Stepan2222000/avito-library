@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import re
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional
+from urllib.parse import unquote
+
+import httpx
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["CardData", "CardParsingError", "parse_card"]
 
@@ -25,6 +33,9 @@ class CardData:
     location: Optional[dict[str, Optional[str]]] = None
     characteristics: Optional[dict[str, str]] = None
     views_total: Optional[int] = None
+    images: Optional[list[bytes]] = None
+    images_urls: Optional[list[str]] = None
+    images_errors: Optional[list[str]] = None
     raw_html: Optional[str] = None
 
 
@@ -38,11 +49,128 @@ _SUPPORTED_FIELDS = {
     "location",
     "characteristics",
     "views_total",
+    "images",
     "raw_html",
 }
 
+# ============================================================================
+# Image downloading constants
+# ============================================================================
 
-def parse_card(
+_MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB per file
+_RETRY_DELAYS = (1.0, 2.0, 4.0)  # Exponential backoff
+_CHUNK_SIZE = 8192
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
+
+def _validate_image(data: bytes) -> bool:
+    """Проверка magic bytes изображения."""
+    if len(data) < 12:
+        return False
+    # JPEG: FF D8 FF
+    if data[:3] == b"\xff\xd8\xff":
+        return True
+    # PNG: 89 50 4E 47 0D 0A 1A 0A
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return True
+    # WebP: RIFF....WEBP
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return True
+    # GIF: GIF87a or GIF89a
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return True
+    return False
+
+
+async def _download_images(
+    urls: list[str],
+    max_concurrent: int = 10,
+    timeout: float = 15.0,
+) -> tuple[list[bytes], list[str]]:
+    """
+    Параллельно скачивает изображения.
+
+    Args:
+        urls: Список URL изображений
+        max_concurrent: Максимум параллельных запросов
+        timeout: Таймаут на запрос
+
+    Returns:
+        (images: list[bytes], errors: list[str])
+    """
+    if not urls:
+        return [], []
+
+    images: list[bytes] = []
+    errors: list[str] = []
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    async def fetch_one(
+        client: httpx.AsyncClient, url: str
+    ) -> tuple[Optional[bytes], Optional[str]]:
+        """Скачивает одно изображение с retry."""
+        last_error = ""
+
+        for attempt, delay in enumerate(_RETRY_DELAYS, 1):
+            try:
+                async with client.stream("GET", url) as response:
+                    if response.status_code != 200:
+                        last_error = f"HTTP {response.status_code}"
+                        if response.status_code not in _RETRYABLE_STATUS_CODES:
+                            break  # Не retryable
+                        if attempt < len(_RETRY_DELAYS):
+                            await asyncio.sleep(delay)
+                        continue
+
+                    # Streaming с лимитом размера
+                    chunks: list[bytes] = []
+                    total = 0
+                    async for chunk in response.aiter_bytes(_CHUNK_SIZE):
+                        total += len(chunk)
+                        if total > _MAX_IMAGE_SIZE:
+                            return None, f"Size exceeded: {total}"
+                        chunks.append(chunk)
+
+                    data = b"".join(chunks)
+
+                    # Валидация magic bytes
+                    if not _validate_image(data):
+                        return None, "Invalid image format"
+
+                    return data, None
+
+            except httpx.TimeoutException:
+                last_error = "Timeout"
+            except Exception as e:
+                last_error = str(e)
+
+            if attempt < len(_RETRY_DELAYS):
+                await asyncio.sleep(delay)
+
+        return None, last_error or "Unknown error"
+
+    async def fetch_with_semaphore(
+        client: httpx.AsyncClient, url: str, index: int
+    ) -> tuple[int, str, tuple[Optional[bytes], Optional[str]]]:
+        async with semaphore:
+            return index, url, await fetch_one(client, url)
+
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        tasks = [fetch_with_semaphore(client, url, i) for i, url in enumerate(urls)]
+        results = await asyncio.gather(*tasks)
+
+    # Сортируем по индексу, собираем результаты
+    for index, url, (data, error) in sorted(results):
+        if data:
+            images.append(data)
+        if error:
+            errors.append(f"{url}: {error}")
+
+    return images, errors
+
+
+async def parse_card(
     html: str,
     *,
     fields: Iterable[str],
@@ -93,6 +221,15 @@ def parse_card(
 
     if "views_total" in requested_fields:
         data.views_total = _extract_views(soup)
+
+    if "images" in requested_fields:
+        urls = _extract_images(soup, html)
+        data.images_urls = urls
+        if urls:
+            data.images, data.images_errors = await _download_images(urls)
+        else:
+            data.images = []
+            data.images_errors = []
 
     if include_html:
         data.raw_html = html
@@ -242,3 +379,255 @@ def _extract_views(soup: BeautifulSoup) -> Optional[int]:
         return int("".join(digits))
     except ValueError:
         return None
+
+
+# ============================================================================
+# Image extraction (HIGH QUALITY 1280x960)
+# ============================================================================
+
+# Альтернативные пути к imageUrls (защита от изменений структуры Avito)
+_IMAGE_PATHS: list[list[str]] = [
+    ["@avito/bx-item-view", "buyerItem", "item", "imageUrls"],
+    ["@avito/bx-item-view-v2", "buyerItem", "item", "imageUrls"],
+    ["buyerItem", "item", "imageUrls"],
+    ["item", "imageUrls"],
+]
+
+# Приоритет размеров (от лучшего к худшему)
+_SIZE_PRIORITY: list[str] = ["1280x960", "640x480", "150x110", "75x55"]
+
+# Максимальная глубина рекурсивного поиска
+_MAX_RECURSION_DEPTH: int = 6
+
+
+def _safe_get(data: dict, path: list[str]) -> Any:
+    """Безопасный обход вложенного dict по списку ключей."""
+    current: Any = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+        if current is None:
+            return None
+    return current
+
+
+def _recursive_find_key(data: Any, target_key: str, depth: int = 0) -> Optional[list]:
+    """Рекурсивный поиск ключа imageUrls в JSON (fallback)."""
+    if depth > _MAX_RECURSION_DEPTH:
+        return None
+
+    if isinstance(data, dict):
+        if target_key in data:
+            value = data[target_key]
+            if isinstance(value, list):
+                return value
+        for value in data.values():
+            result = _recursive_find_key(value, target_key, depth + 1)
+            if result is not None:
+                return result
+
+    # Обходим массивы тоже (исправление из review)
+    elif isinstance(data, list):
+        for item in data:
+            result = _recursive_find_key(item, target_key, depth + 1)
+            if result is not None:
+                return result
+
+    return None
+
+
+def _parse_preloaded_state(html_text: str) -> Optional[dict]:
+    """Извлекает и парсит __preloadedState__ из HTML."""
+
+    # Паттерны для разных форматов
+    # 1. URL-encoded string (основной формат): __preloadedState__ = "..."
+    # 2. Raw JSON (запасной): __preloadedState__ = {...}
+    patterns = [
+        # URL-encoded - поддержка escaped quotes (исправление из review)
+        r'__preloadedState__\s*=\s*"((?:[^"\\]|\\.)*)"',
+        # Raw JSON (упрощенный)
+        r'__preloadedState__\s*=\s*(\{[^<]*)',
+    ]
+
+    for i, pattern in enumerate(patterns):
+        match = re.search(pattern, html_text, re.DOTALL)
+        if not match:
+            continue
+
+        raw = match.group(1)
+
+        try:
+            # URL-encoded JSON (начинается с %7B)
+            if raw.startswith("%7B") or raw.startswith("%7b"):
+                json_str = unquote(raw)
+            elif raw.startswith("{"):
+                # Raw JSON - пытаемся сбалансировать скобки (исправление из review)
+                json_str = _extract_balanced_json(raw)
+                if not json_str:
+                    continue
+            else:
+                continue
+
+            return json.loads(json_str)
+
+        except json.JSONDecodeError as e:
+            logger.debug(f"JSON parse failed (pattern {i}): {e}")
+            continue
+
+    return None
+
+
+def _extract_balanced_json(raw: str) -> Optional[str]:
+    """Извлекает сбалансированный JSON из строки, начинающейся с '{'."""
+    if not raw.startswith("{"):
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+    end = 0
+
+    for i, char in enumerate(raw):
+        if escape:
+            escape = False
+            continue
+
+        if char == "\\":
+            escape = True
+            continue
+
+        if char == '"' and not escape:
+            in_string = not in_string
+            continue
+
+        if in_string:
+            continue
+
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if end == 0:
+        return None
+
+    return raw[:end]
+
+
+def _extract_urls_from_image_data(image_urls: list) -> list[str]:
+    """Извлекает URL лучшего качества из массива imageUrls."""
+    result: list[str] = []
+    seen: set[str] = set()  # Удаление дубликатов (исправление из review)
+
+    for img_data in image_urls:
+        if not isinstance(img_data, dict):
+            continue
+
+        # Берём лучшее доступное качество
+        url: Optional[str] = None
+        for size in _SIZE_PRIORITY:
+            url = img_data.get(size)
+            if url:
+                break
+
+        if url and isinstance(url, str) and url not in seen:
+            result.append(url)
+            seen.add(url)
+
+    return result
+
+
+def _extract_images_from_html_gallery(soup: BeautifulSoup) -> list[str]:
+    """Fallback: извлечение из HTML галереи (миниатюры)."""
+    images: list[str] = []
+    seen: set[str] = set()
+
+    # Основной селектор
+    for li in soup.select('li[data-marker="image-preview/item"]'):
+        img = li.select_one("img")
+        if img:
+            src = img.get("src") or img.get("data-src")
+            if src and isinstance(src, str) and src not in seen:
+                images.append(src)
+                seen.add(src)
+
+    # Альтернативный селектор
+    if not images:
+        for img in soup.select('div[data-marker="item-view/gallery"] img'):
+            src = img.get("src")
+            if src and isinstance(src, str) and src not in seen:
+                images.append(src)
+                seen.add(src)
+
+    return images
+
+
+def _extract_images_from_og_meta(soup: BeautifulSoup) -> list[str]:
+    """Fallback: извлечение из OpenGraph meta-тегов."""
+    images: list[str] = []
+    for meta in soup.select('meta[property="og:image"]'):
+        content = meta.get("content")
+        if content and isinstance(content, str):
+            images.append(content)
+    return images
+
+
+def _extract_images(soup: BeautifulSoup, html: str) -> list[str]:
+    """
+    Извлекает URL изображений высокого качества из HTML карточки Avito.
+
+    Стратегия (по приоритету):
+    1. JSON из __preloadedState__ → imageUrls[]["1280x960"]
+    2. HTML галерея → li[data-marker="image-preview/item"] img
+    3. OpenGraph meta → meta[property="og:image"]
+
+    Args:
+        soup: BeautifulSoup объект
+        html: Исходный HTML (для парсинга JSON без str(soup))
+
+    Returns:
+        list[str]: Список URL (пустой если изображений нет)
+    """
+
+    # === Стратегия 1: __preloadedState__ JSON ===
+    state = _parse_preloaded_state(html)
+
+    if state:
+        # Пробуем известные пути
+        image_urls: Optional[list] = None
+        for path in _IMAGE_PATHS:
+            image_urls = _safe_get(state, path)
+            if image_urls and isinstance(image_urls, list):
+                logger.debug(f"Found imageUrls via path: {'/'.join(path)}")
+                break
+
+        # Fallback: рекурсивный поиск
+        if not image_urls:
+            image_urls = _recursive_find_key(state, "imageUrls")
+            if image_urls:
+                logger.debug("Found imageUrls via recursive search")
+
+        if image_urls:
+            urls = _extract_urls_from_image_data(image_urls)
+            if urls:
+                logger.debug(f"Extracted {len(urls)} HQ image URLs from JSON")
+                return urls
+
+    # === Стратегия 2: HTML галерея ===
+    urls = _extract_images_from_html_gallery(soup)
+    if urls:
+        logger.debug(f"Using HTML gallery fallback: {len(urls)} URLs")
+        return urls
+
+    # === Стратегия 3: OpenGraph meta ===
+    urls = _extract_images_from_og_meta(soup)
+    if urls:
+        logger.debug(f"Using og:image fallback: {len(urls)} URLs")
+        return urls
+
+    logger.debug("No images found in HTML")
+    return []

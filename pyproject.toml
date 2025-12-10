@@ -17,7 +17,8 @@ dependencies = [
     "beautifulsoup4",
     "lxml",
     "numpy",
-    "opencv-python"
+    "opencv-python",
+    "httpx>=0.25.0",
 ]
 keywords = ["avito", "playwright", "asyncio", "captcha", "parser"]
 
