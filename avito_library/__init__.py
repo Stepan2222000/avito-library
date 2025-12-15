@@ -32,7 +32,10 @@ from .parsers.catalog_parser import (
     CatalogParseMeta,
     CatalogParseResult,
     CatalogParseStatus,
+    SinglePageResult,
+    navigate_to_catalog,
     parse_catalog,
+    parse_single_page,
 )
 from .parsers.seller_profile_parser import (
     SellerIdNotFound,
@@ -69,7 +72,10 @@ __all__ = [
     "CatalogParseMeta",
     "CatalogParseResult",
     "CatalogParseStatus",
+    "SinglePageResult",
+    "navigate_to_catalog",
     "parse_catalog",
+    "parse_single_page",
     "collect_seller_items",
     "SellerProfileParsingResult",
     "SellerIdNotFound",
