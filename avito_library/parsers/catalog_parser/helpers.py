@@ -21,6 +21,7 @@ SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
 
 __all__ = [
+    "SORT_PARAMS",
     "apply_sort",
     "apply_start_page",
     "load_catalog_cards",
@@ -30,15 +31,37 @@ __all__ = [
 ]
 
 
-def apply_sort(url: str, sort_by_date: bool) -> str:
-    """Добавляет к URL параметр сортировки по дате."""
+SORT_PARAMS: dict[str, str] = {
+    "date": "104",
+    "price_asc": "1",
+    "price_desc": "2",
+    "mileage_asc": "2687_asc",
+}
 
-    if not sort_by_date:
+
+def apply_sort(url: str, sort: str | None) -> str:
+    """Добавляет к URL параметр сортировки.
+
+    Args:
+        url: исходный URL каталога.
+        sort: тип сортировки (date, price_asc, price_desc, mileage_asc) или None.
+
+    Returns:
+        URL с добавленным параметром сортировки или исходный URL если sort=None.
+
+    Raises:
+        ValueError: если передано недопустимое значение sort.
+    """
+    if sort is None:
         return url
+
+    if sort not in SORT_PARAMS:
+        valid = ", ".join(SORT_PARAMS.keys())
+        raise ValueError(f"Invalid sort value: {sort!r}. Valid: {valid}")
 
     parsed = urlparse(url)
     query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
-    query_params["s"] = "104"
+    query_params["s"] = SORT_PARAMS[sort]
     new_query = urlencode(query_params, doseq=True)
     return urlunparse(parsed._replace(query=new_query))
 

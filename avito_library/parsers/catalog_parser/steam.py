@@ -101,7 +101,7 @@ async def parse_catalog_until_complete(
     *,
     fields: Iterable[str],
     max_pages: int | None = 1,
-    sort_by_date: bool = False,
+    sort: str | None = None,
     include_html: bool = False,
     start_page: int = 1,
 ) -> CatalogParseResult:
@@ -137,7 +137,7 @@ async def parse_catalog_until_complete(
             catalog_url,
             fields=fields,
             max_pages=chunk_limit,
-            sort_by_date=sort_by_date,
+            sort=sort,
             include_html=include_html,
             start_page=next_start_page,
         )

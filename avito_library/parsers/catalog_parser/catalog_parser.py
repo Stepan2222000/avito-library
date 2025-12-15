@@ -43,7 +43,7 @@ async def parse_catalog(
     *,
     fields: Iterable[str],
     max_pages: int | None = 1,
-    sort_by_date: bool = False,
+    sort: str | None = None,
     include_html: bool = False,
     start_page: int = 1,
 ) -> CatalogParseResult:
@@ -54,7 +54,7 @@ async def parse_catalog(
         catalog_url: исходный URL каталога.
         fields: набор идентификаторов полей (см. README).
         max_pages: максимальное количество страниц для обхода (>=1) или None для полного обхода.
-        sort_by_date: включить ли сортировку `s=104`.
+        sort: тип сортировки (date, price_asc, price_desc, mileage_asc) или None.
         include_html: сохранить ли HTML карточек в `raw_html`.
         start_page: номер страницы, с которой начинать обход.
 
@@ -71,7 +71,7 @@ async def parse_catalog(
     if start_page < 1:
         raise ValueError("start_page must be >= 1")
 
-    prepared_url = apply_sort(catalog_url, sort_by_date)
+    prepared_url = apply_sort(catalog_url, sort)
     # TODO(phase-2): предусмотреть проверку существования страницы перед переходом.
     prepared_url = apply_start_page(prepared_url, start_page)
 
