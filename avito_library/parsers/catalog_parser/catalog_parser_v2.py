@@ -1,18 +1,19 @@
-"""Парсер каталога Avito v2 с поддержкой продолжения.
+"""Парсер каталога Avito v2 с поддержкой продолжения и фильтрации.
 
 Новая архитектура с тремя уровнями API:
 - navigate_to_catalog() — переход на страницу каталога
 - parse_single_page() — парсинг одной страницы
-- parse_catalog() — парсинг всех страниц с пагинацией
+- parse_catalog() — парсинг всех страниц с пагинацией и фильтрами
 
-Ключевые отличия от v1:
-- Страница уже открыта перед вызовом парсера
-- Метод continue_from() для продолжения после ошибок прокси
-- Нет глобального состояния — всё в объекте результата
+Поддержка фильтрации:
+- URL-фильтры: город, категория, марка, модель, кузов, топливо, коробка, состояние
+- GET-параметры: цена, радиус, сортировка
+- Механические фильтры: год, пробег, объём, привод, мощность, турбина, продавцы
 """
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Iterable
 
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeout
@@ -33,6 +34,7 @@ from avito_library.detectors import (
 )
 
 from .helpers import extract_listing, get_next_page_url, load_catalog_cards
+from .mechanical_filters import apply_mechanical_filters
 from .models import (
     CatalogListing,
     CatalogParseMeta,
@@ -41,6 +43,9 @@ from .models import (
     SinglePageResult,
 )
 from .navigation import navigate_to_catalog
+from .url_builder import build_catalog_url, merge_url_with_params
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -204,64 +209,283 @@ async def parse_single_page(
 
 async def parse_catalog(
     page: Page,
-    catalog_url: str,
+    url: str | None = None,
     *,
+    # Параметры для построения URL (ЧПУ-сегменты)
+    city: str | None = None,
+    category: str | None = None,
+    brand: str | None = None,
+    model: str | None = None,
+    body_type: str | None = None,
+    fuel_type: str | None = None,
+    transmission: list[str] | None = None,
+    condition: str | None = None,
+    # GET-параметры
+    price_min: int | None = None,
+    price_max: int | None = None,
+    radius: int | None = None,
+    sort: str | None = None,
+    # Механические фильтры
+    year_from: int | None = None,
+    year_to: int | None = None,
+    mileage_from: int | None = None,
+    mileage_to: int | None = None,
+    engine_volumes: list[float] | None = None,
+    drive: list[str] | None = None,
+    power_from: int | None = None,
+    power_to: int | None = None,
+    turbo: bool | None = None,
+    seller_type: str | None = None,
+    # Параметры парсинга
     fields: Iterable[str],
     max_pages: int | None = None,
-    sort: str | None = None,
     start_page: int = 1,
     include_html: bool = False,
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
     load_retries: int = 5,
 ) -> CatalogParseResult:
-    """Парсит все страницы каталога с пагинацией (страница уже открыта).
+    """Парсит каталог Avito с автоматическим применением фильтров.
 
-    Это главная функция для парсинга каталога. При критической ошибке
-    возвращает результат с возможностью продолжения через continue_from().
-
-    Что делает:
-    1. Вызывает parse_single_page() для текущей страницы
-    2. Накапливает карточки со всех страниц
-    3. Переходит на следующую страницу через navigate_to_catalog()
-    4. При ошибке возвращает результат с информацией для продолжения
+    Главная функция для парсинга каталога. Автоматически:
+    - Строит URL с ЧПУ-сегментами и GET-параметрами
+    - Применяет механические фильтры через Playwright
+    - Парсит все страницы с пагинацией
 
     Args:
-        page: Playwright Page, уже открытая на каталоге.
-        catalog_url: Базовый URL каталога (для navigate_to_catalog при переходе
-            на следующие страницы).
-        fields: Набор полей для извлечения из карточек.
-        max_pages: Максимум страниц для обработки. None = без лимита.
-        sort: Сортировка: "date", "price_asc", "price_desc", "mileage_asc".
-        start_page: С какой страницы начинать (для расчёта resume_page_number).
-        include_html: Сохранять ли HTML карточек.
-        max_captcha_attempts: Максимум попыток решения капчи на странице.
-        load_timeout: Таймаут загрузки страницы в миллисекундах.
-        load_retries: Количество retry при таймауте загрузки.
+        page: Playwright Page.
+        url: Готовый URL каталога (опционально). Если передан — параметры
+            фильтрации объединяются с параметрами из URL.
+
+        # ЧПУ-сегменты (русский язык, нормализуется автоматически):
+        city: Slug города ("moskva", "spb"). None = все регионы.
+        category: Slug категории ("avtomobili"). Обязателен если url не передан!
+        brand: Slug марки ("bmw", "toyota").
+        model: Slug модели ("x5", "camry").
+        body_type: Тип кузова ("Седан", "Внедорожник").
+        fuel_type: Тип топлива ("Бензин", "Дизель").
+        transmission: Коробка передач (["Механика"], ["Механика", "Автомат"]).
+            Если одно значение — применяется через URL.
+            Если несколько — применяется механически.
+        condition: Состояние ("С пробегом", "Новый").
+
+        # GET-параметры:
+        price_min, price_max: Диапазон цены (рубли).
+        radius: Радиус поиска (0, 50, 100, 200, 300, 500 км).
+        sort: Сортировка ("date", "price_asc", "price_desc", "mileage_asc").
+
+        # Механические фильтры (применяются через Playwright):
+        year_from, year_to: Год выпуска.
+        mileage_from, mileage_to: Пробег (км).
+        engine_volumes: Объёмы двигателя ([2.0, 2.5]).
+        drive: Тип привода (["Полный"], ["Передний", "Задний"]).
+        power_from, power_to: Мощность (л.с.).
+        turbo: Наличие турбины (True/False).
+        seller_type: Тип продавца ("Дилеры", "Частные").
+
+        # Параметры парсинга:
+        fields: Поля для извлечения ("item_id", "title", "price", ...).
+        max_pages: Максимум страниц. None = без лимита.
+        start_page: Начальная страница (для resume).
+        include_html: Сохранять HTML карточек.
+        max_captcha_attempts: Попыток решения капчи.
+        load_timeout: Таймаут загрузки (мс).
+        load_retries: Retry при таймауте.
 
     Returns:
         CatalogParseResult с карточками и метаинформацией.
-        При критической ошибке результат содержит resume_url и метод continue_from().
+
+    Raises:
+        ValueError: При конфликте параметров или отсутствии category.
 
     Examples:
-        >>> # Обычное использование
-        >>> await navigate_to_catalog(page, "https://avito.ru/moskva/telefony")
+        >>> # С готовым URL
         >>> result = await parse_catalog(
         ...     page,
-        ...     "https://avito.ru/moskva/telefony",
-        ...     fields=["title", "price"],
+        ...     url="https://www.avito.ru/moskva/avtomobili/bmw",
+        ...     body_type="Седан",
+        ...     price_min=500000,
+        ...     fields=["item_id", "title", "price"],
+        ... )
+
+        >>> # С параметрами
+        >>> result = await parse_catalog(
+        ...     page,
+        ...     city="moskva",
+        ...     category="avtomobili",
+        ...     brand="bmw",
+        ...     body_type="Седан",
+        ...     year_from=2018,
+        ...     drive=["Полный"],
+        ...     fields=["item_id", "title", "price"],
         ...     max_pages=10,
         ... )
-        >>> print(f"Собрано {len(result.listings)} карточек")
-
-        >>> # Продолжение после ошибки
-        >>> if result.status == CatalogParseStatus.PROXY_BLOCKED:
-        ...     new_page = await create_page_with_new_proxy()
-        ...     result = await result.continue_from(new_page)
     """
     fields_set = set(fields)
     listings: list[CatalogListing] = []
     processed_pages = 0
+
+    # === Логика построения URL и применения фильтров ===
+
+    # Определяем transmission для URL (только если одно значение)
+    transmission_for_url: str | None = None
+    transmission_mechanical: list[str] | None = None
+
+    if transmission:
+        if len(transmission) == 1:
+            transmission_for_url = transmission[0]
+        else:
+            transmission_mechanical = transmission
+
+    # Строим или парсим URL
+    if url is not None:
+        # URL передан — объединяем с параметрами
+        merged_params, catalog_url = merge_url_with_params(
+            url,
+            city=city,
+            category=category,
+            brand=brand,
+            model=model,
+            body_type=body_type,
+            fuel_type=fuel_type,
+            transmission=transmission_for_url,
+            condition=condition,
+            price_min=price_min,
+            price_max=price_max,
+            radius=radius,
+            sort=sort,
+        )
+        logger.info("URL построен из переданного: %s", catalog_url)
+    else:
+        # URL не передан — строим с нуля
+        if category is None:
+            raise ValueError("Параметр category обязателен если url не передан")
+
+        catalog_url = build_catalog_url(
+            city=city,
+            category=category,
+            brand=brand,
+            model=model,
+            body_type=body_type,
+            fuel_type=fuel_type,
+            transmission=transmission_for_url,
+            condition=condition,
+            price_min=price_min,
+            price_max=price_max,
+            radius=radius,
+            sort=sort,
+        )
+        logger.info("URL построен: %s", catalog_url)
+
+    # Определяем нужны ли механические фильтры
+    need_mechanical = any([
+        year_from is not None,
+        year_to is not None,
+        mileage_from is not None,
+        mileage_to is not None,
+        engine_volumes,
+        transmission_mechanical,
+        drive,
+        power_from is not None,
+        power_to is not None,
+        turbo is not None,
+        seller_type,
+    ])
+
+    # Переходим на страницу каталога
+    await navigate_to_catalog(
+        page,
+        catalog_url,
+        sort=sort,
+        start_page=start_page,
+        timeout=load_timeout,
+    )
+
+    # Проверяем состояние и решаем капчу после навигации (ОДНА проверка)
+    state = await detect_page_state(page)
+    captcha_attempts = 0
+    while state in _CAPTCHA_STATES and captcha_attempts < max_captcha_attempts:
+        captcha_attempts += 1
+        _, solved = await resolve_captcha_flow(page, max_attempts=1)
+        if solved:
+            state = await detect_page_state(page)
+            if state == CATALOG_DETECTOR_ID:
+                break
+            if state in _CRITICAL_STATES:
+                return _build_result(
+                    status=_CRITICAL_STATES[state],
+                    listings=[],
+                    processed_pages=0,
+                    error_state=state,
+                    error_url=page.url,
+                    resume_url=page.url,
+                    catalog_url=catalog_url,
+                    fields=fields_set,
+                    max_pages=max_pages,
+                    sort=sort,
+                    start_page=start_page,
+                    include_html=include_html,
+                    max_captcha_attempts=max_captcha_attempts,
+                    load_timeout=load_timeout,
+                    load_retries=load_retries,
+                )
+
+    if state in _CAPTCHA_STATES:
+        return _build_result(
+            status=CatalogParseStatus.CAPTCHA_FAILED,
+            listings=[],
+            processed_pages=0,
+            error_state=state,
+            error_url=page.url,
+            resume_url=page.url,
+            catalog_url=catalog_url,
+            fields=fields_set,
+            max_pages=max_pages,
+            sort=sort,
+            start_page=start_page,
+            include_html=include_html,
+            max_captcha_attempts=max_captcha_attempts,
+            load_timeout=load_timeout,
+            load_retries=load_retries,
+        )
+
+    if state in _CRITICAL_STATES:
+        return _build_result(
+            status=_CRITICAL_STATES[state],
+            listings=[],
+            processed_pages=0,
+            error_state=state,
+            error_url=page.url,
+            resume_url=page.url,
+            catalog_url=catalog_url,
+            fields=fields_set,
+            max_pages=max_pages,
+            sort=sort,
+            start_page=start_page,
+            include_html=include_html,
+            max_captcha_attempts=max_captcha_attempts,
+            load_timeout=load_timeout,
+            load_retries=load_retries,
+        )
+
+    # Применяем механические фильтры если нужно
+    if need_mechanical:
+        logger.info("Применяем механические фильтры...")
+        catalog_url = await apply_mechanical_filters(
+            page,
+            year_from=year_from,
+            year_to=year_to,
+            mileage_from=mileage_from,
+            mileage_to=mileage_to,
+            engine_volumes=engine_volumes,
+            transmission=transmission_mechanical,
+            drive=drive,
+            power_from=power_from,
+            power_to=power_to,
+            turbo=turbo,
+            seller_type=seller_type,
+        )
+        logger.info("Механические фильтры применены, новый URL: %s", catalog_url)
 
     while True:
         # Проверяем лимит страниц

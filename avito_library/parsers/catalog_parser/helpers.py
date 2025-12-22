@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urljoin, urlencode, urlparse, urlunparse
 from playwright.async_api import Locator, Page
 
 from ...detectors.catalog_page_detector import CATALOG_ITEM_SELECTOR
+from .constants import SORT_PARAMS
 from .models import CatalogListing
 
 CATALOG_CARD_SELECTOR = CATALOG_ITEM_SELECTOR
@@ -21,7 +22,7 @@ SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
 
 __all__ = [
-    "SORT_PARAMS",
+    "SORT_PARAMS",  # реэкспорт из constants
     "apply_sort",
     "apply_start_page",
     "load_catalog_cards",
@@ -29,14 +30,6 @@ __all__ = [
     "has_empty_markers",
     "extract_listing",
 ]
-
-
-SORT_PARAMS: dict[str, str] = {
-    "date": "104",
-    "price_asc": "1",
-    "price_desc": "2",
-    "mileage_asc": "2687_asc",
-}
 
 
 def apply_sort(url: str, sort: str | None) -> str:
