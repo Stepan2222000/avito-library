@@ -33,47 +33,83 @@ install_playwright_chromium()
 
 ## Быстрый старт
 
+### Простой парсинг каталога
+
 ```python
 import asyncio
 from playwright.async_api import async_playwright
-from avito_library import (
-    detect_page_state,
-    parse_catalog,
-    resolve_captcha_flow,
-    CAPTCHA_DETECTOR_ID,
-    CONTINUE_BUTTON_DETECTOR_ID,
-    PROXY_BLOCK_429_DETECTOR_ID,
-)
+from avito_library import parse_catalog, CatalogParseStatus
 
 async def main():
     async with async_playwright() as pw:
         browser = await pw.chromium.launch()
         page = await browser.new_page()
 
-        response = await page.goto("https://avito.ru/moskva/telefony")
-        state = await detect_page_state(page, last_response=response)
-
-        # Решаем капчу если нужно
-        if state in (CAPTCHA_DETECTOR_ID, CONTINUE_BUTTON_DETECTOR_ID, PROXY_BLOCK_429_DETECTOR_ID):
-            html, solved = await resolve_captcha_flow(page)
-            if not solved:
-                print("Капча не решена")
-                return
-
-        # Парсим каталог
+        # Парсим каталог телефонов
         result = await parse_catalog(
             page,
-            "https://avito.ru/moskva/telefony",
+            category="telefony",
+            city="moskva",
             fields=["item_id", "title", "price"],
             max_pages=3,
         )
 
-        for listing in result.listings:
-            print(f"{listing.item_id}: {listing.title} - {listing.price} руб.")
+        if result.status == CatalogParseStatus.SUCCESS:
+            for listing in result.listings:
+                print(f"{listing.item_id}: {listing.title} - {listing.price} руб.")
 
         await browser.close()
 
 asyncio.run(main())
+```
+
+### Парсинг автомобилей с фильтрами
+
+```python
+import asyncio
+from playwright.async_api import async_playwright
+from avito_library import parse_catalog, CatalogParseStatus
+
+async def main():
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=False)  # headless=False для отладки
+        page = await browser.new_page()
+
+        # Парсим BMW седаны 2018+ года с полным приводом
+        result = await parse_catalog(
+            page,
+            category="avtomobili",
+            city="moskva",
+            brand="bmw",
+            body_type="Седан",
+            year_from=2018,
+            drive=["Полный"],
+            price_min=1_000_000,
+            price_max=3_000_000,
+            sort="date",
+            fields=["item_id", "title", "price", "location_city"],
+            max_pages=5,
+        )
+
+        if result.status == CatalogParseStatus.SUCCESS:
+            print(f"Найдено {len(result.listings)} объявлений")
+            for listing in result.listings:
+                print(f"{listing.title} - {listing.price:,} руб.")
+        else:
+            print(f"Ошибка: {result.status}")
+
+        await browser.close()
+
+asyncio.run(main())
+```
+
+### Продолжение после блокировки прокси
+
+```python
+# При блокировке прокси — создаём новую страницу и продолжаем
+if result.status == CatalogParseStatus.PROXY_BLOCKED:
+    new_page = await browser.new_page(proxy={"server": "http://new-proxy:8080"})
+    result = await result.continue_from(new_page)
 ```
 
 ---
@@ -211,16 +247,41 @@ if state in CAPTCHA_STATES:
 
 ### Функция parse_catalog
 
-Парсит страницы каталога с автоматической пагинацией, решением капчи и возможностью продолжения после ошибок.
+Парсит страницы каталога с автоматической пагинацией, фильтрацией, решением капчи и возможностью продолжения после ошибок.
 
 ```python
 async def parse_catalog(
     page: Page,
-    catalog_url: str,
+    url: str | None = None,
     *,
+    # Параметры для построения URL
+    city: str | None = None,
+    category: str | None = None,
+    brand: str | None = None,
+    model: str | None = None,
+    body_type: str | None = None,
+    fuel_type: str | None = None,
+    transmission: list[str] | None = None,
+    condition: str | None = None,
+    # GET-параметры
+    price_min: int | None = None,
+    price_max: int | None = None,
+    radius: int | None = None,
+    sort: str | None = None,
+    # Механические фильтры (применяются через UI)
+    year_from: int | None = None,
+    year_to: int | None = None,
+    mileage_from: int | None = None,
+    mileage_to: int | None = None,
+    engine_volumes: list[float] | None = None,
+    drive: list[str] | None = None,
+    power_from: int | None = None,
+    power_to: int | None = None,
+    turbo: bool | None = None,
+    seller_type: str | None = None,
+    # Параметры парсинга
     fields: Iterable[str],
     max_pages: int | None = None,
-    sort: str | None = None,
     start_page: int = 1,
     include_html: bool = False,
     max_captcha_attempts: int = 30,
@@ -229,22 +290,138 @@ async def parse_catalog(
 ) -> CatalogParseResult
 ```
 
-**Параметры:**
+**Два способа вызова:**
+
+1. **С параметрами фильтрации** (рекомендуется):
+   ```python
+   result = await parse_catalog(
+       page,
+       category="avtomobili",
+       city="moskva",
+       brand="bmw",
+       year_from=2018,
+       fields=["item_id", "title", "price"],
+   )
+   ```
+
+2. **С готовым URL:**
+   ```python
+   result = await parse_catalog(
+       page,
+       url="https://avito.ru/moskva/avtomobili/bmw",
+       fields=["item_id", "title", "price"],
+   )
+   ```
+
+### Параметры фильтрации
+
+#### Основные параметры
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `page` | `Page` | Playwright-страница |
+| `url` | `str \| None` | Готовый URL каталога (опционально) |
+| `category` | `str` | Slug категории. **Обязателен если url не передан!** |
+| `city` | `str \| None` | Slug города. `None` = все регионы (`all`) |
+| `fields` | `Iterable[str]` | Поля для извлечения (см. CatalogListing) |
+
+#### URL-фильтры (ЧПУ-сегменты)
+
+Эти фильтры добавляются в URL как человекопонятные сегменты.
+
+| Параметр | Тип | Описание | Пример URL |
+|----------|-----|----------|------------|
+| `brand` | `str` | Slug марки | `/bmw`, `/toyota` |
+| `model` | `str` | Slug модели | `/bmw/x5` |
+| `body_type` | `str` | Тип кузова (русский) | `/sedan` |
+| `fuel_type` | `str` | Тип топлива (русский) | `/benzin` |
+| `transmission` | `list[str]` | Коробка (если 1 значение) | `/mekhanika` |
+| `condition` | `str` | Состояние (русский) | `/s_probegom` |
+
+#### GET-параметры
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `price_min` | `int` | Минимальная цена (рубли) |
+| `price_max` | `int` | Максимальная цена (рубли) |
+| `radius` | `int` | Радиус поиска: 0, 50, 100, 200, 300, 500 км |
+| `sort` | `str` | Сортировка (см. ниже) |
+
+#### Механические фильтры
+
+Эти фильтры применяются через взаимодействие с UI страницы (Playwright кликает на элементы).
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `year_from` | `int` | Год выпуска от |
+| `year_to` | `int` | Год выпуска до |
+| `mileage_from` | `int` | Пробег от (км) |
+| `mileage_to` | `int` | Пробег до (км) |
+| `engine_volumes` | `list[float]` | Объёмы двигателя: `[2.0, 2.5]` |
+| `transmission` | `list[str]` | Коробка (если 2+ значений) |
+| `drive` | `list[str]` | Тип привода |
+| `power_from` | `int` | Мощность от (л.с.) |
+| `power_to` | `int` | Мощность до (л.с.) |
+| `turbo` | `bool` | Наличие турбины |
+| `seller_type` | `str` | Тип продавца |
+
+#### Параметры парсинга
 
 | Параметр | Тип | По умолчанию | Описание |
 |----------|-----|--------------|----------|
-| `page` | `Page` | — | Playwright-страница |
-| `catalog_url` | `str` | — | Базовый URL каталога |
-| `fields` | `Iterable[str]` | — | Поля для извлечения (см. CatalogListing) |
 | `max_pages` | `int \| None` | `None` | Лимит страниц (None = без лимита) |
-| `sort` | `str \| None` | `None` | Сортировка (см. ниже) |
 | `start_page` | `int` | `1` | Начальная страница |
 | `include_html` | `bool` | `False` | Сохранять HTML карточек |
 | `max_captcha_attempts` | `int` | `30` | Макс. попыток решения капчи |
 | `load_timeout` | `int` | `180000` | Таймаут загрузки страницы (мс) |
 | `load_retries` | `int` | `5` | Повторов при таймауте |
 
-**Возвращает:** `CatalogParseResult`
+### Допустимые значения фильтров
+
+#### body_type (тип кузова)
+
+```
+Седан, Хэтчбек, Универсал, Внедорожник, Кроссовер, Купе,
+Кабриолет, Пикап, Минивэн, Лимузин, Фургон
+```
+
+#### fuel_type (тип топлива)
+
+```
+Бензин, Дизель, Электро, Гибрид, Газ
+```
+
+#### transmission (коробка передач)
+
+```
+Механика, Автомат, Робот, Вариатор
+```
+
+#### condition (состояние)
+
+```
+С пробегом, Новый
+```
+
+#### drive (тип привода)
+
+```
+Передний, Задний, Полный
+```
+
+#### seller_type (тип продавца)
+
+```
+Дилеры, Частные
+```
+
+#### engine_volumes (объём двигателя)
+
+```
+0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
+2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.5, 4.0, 4.5,
+5.0, 5.5, 6.0, 6.5, 7.0
+```
 
 ### Сортировка каталога
 
@@ -253,26 +430,51 @@ async def parse_catalog(
 | `"date"` | По дате публикации (сначала новые) |
 | `"price_asc"` | По цене (сначала дешёвые) |
 | `"price_desc"` | По цене (сначала дорогие) |
-| `"mileage_asc"` | По пробегу (для автомобилей, сначала с меньшим пробегом) |
+| `"mileage_asc"` | По пробегу (для автомобилей) |
 
-**Пример:**
+### Примеры использования
+
+**Простой парсинг:**
 
 ```python
-from avito_library import parse_catalog, CatalogParseStatus
-
 result = await parse_catalog(
     page,
-    "https://avito.ru/moskva/telefony",
-    fields=["item_id", "title", "price", "seller_name"],
+    category="telefony",
+    city="moskva",
+    fields=["item_id", "title", "price"],
     max_pages=5,
-    sort="date",  # Сначала новые объявления
 )
+```
 
-if result.status == CatalogParseStatus.SUCCESS:
-    for listing in result.listings:
-        print(f"{listing.item_id}: {listing.title}")
-else:
-    print(f"Ошибка: {result.status}, состояние: {result.error_state}")
+**С фильтрами автомобилей:**
+
+```python
+result = await parse_catalog(
+    page,
+    category="avtomobili",
+    city="moskva",
+    brand="bmw",
+    body_type="Седан",
+    transmission=["Автомат", "Робот"],  # 2+ значений → механически
+    year_from=2018,
+    drive=["Полный"],
+    price_min=1_000_000,
+    sort="date",
+    fields=["item_id", "title", "price", "location_city"],
+    max_pages=10,
+)
+```
+
+**С готовым URL + дополнительные фильтры:**
+
+```python
+result = await parse_catalog(
+    page,
+    url="https://avito.ru/moskva/avtomobili/bmw",
+    body_type="Седан",
+    year_from=2020,
+    fields=["item_id", "title", "price"],
+)
 ```
 
 ### Модель CatalogParseResult
