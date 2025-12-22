@@ -244,6 +244,7 @@ async def parse_catalog(
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
     load_retries: int = 5,
+    _skip_navigation: bool = False,
 ) -> CatalogParseResult:
     """Парсит каталог Avito с автоматическим применением фильтров.
 
@@ -327,79 +328,87 @@ async def parse_catalog(
 
     # === Логика построения URL и применения фильтров ===
 
-    # Определяем transmission для URL (только если одно значение)
-    transmission_for_url: str | None = None
-    transmission_mechanical: list[str] | None = None
-
-    if transmission:
-        if len(transmission) == 1:
-            transmission_for_url = transmission[0]
-        else:
-            transmission_mechanical = transmission
-
-    # Строим или парсим URL
-    if url is not None:
-        # URL передан — объединяем с параметрами
-        merged_params, catalog_url = merge_url_with_params(
-            url,
-            city=city,
-            category=category,
-            brand=brand,
-            model=model,
-            body_type=body_type,
-            fuel_type=fuel_type,
-            transmission=transmission_for_url,
-            condition=condition,
-            price_min=price_min,
-            price_max=price_max,
-            radius=radius,
-            sort=sort,
-        )
-        logger.info("URL построен из переданного: %s", catalog_url)
+    # При _skip_navigation=True (continue_from):
+    # - Навигация уже сделана в _continue_parsing()
+    # - URL страницы уже содержит все фильтры в параметре f
+    if _skip_navigation:
+        catalog_url = page.url
+        need_mechanical = False
+        logger.info("Пропускаем навигацию (_skip_navigation=True), URL: %s", catalog_url)
     else:
-        # URL не передан — строим с нуля
-        if category is None:
-            raise ValueError("Параметр category обязателен если url не передан")
+        # Определяем transmission для URL (только если одно значение)
+        transmission_for_url: str | None = None
+        transmission_mechanical: list[str] | None = None
 
-        catalog_url = build_catalog_url(
-            city=city,
-            category=category,
-            brand=brand,
-            model=model,
-            body_type=body_type,
-            fuel_type=fuel_type,
-            transmission=transmission_for_url,
-            condition=condition,
-            price_min=price_min,
-            price_max=price_max,
-            radius=radius,
+        if transmission:
+            if len(transmission) == 1:
+                transmission_for_url = transmission[0]
+            else:
+                transmission_mechanical = transmission
+
+        # Строим или парсим URL
+        if url is not None:
+            # URL передан — объединяем с параметрами
+            merged_params, catalog_url = merge_url_with_params(
+                url,
+                city=city,
+                category=category,
+                brand=brand,
+                model=model,
+                body_type=body_type,
+                fuel_type=fuel_type,
+                transmission=transmission_for_url,
+                condition=condition,
+                price_min=price_min,
+                price_max=price_max,
+                radius=radius,
+                sort=sort,
+            )
+            logger.info("URL построен из переданного: %s", catalog_url)
+        else:
+            # URL не передан — строим с нуля
+            if category is None:
+                raise ValueError("Параметр category обязателен если url не передан")
+
+            catalog_url = build_catalog_url(
+                city=city,
+                category=category,
+                brand=brand,
+                model=model,
+                body_type=body_type,
+                fuel_type=fuel_type,
+                transmission=transmission_for_url,
+                condition=condition,
+                price_min=price_min,
+                price_max=price_max,
+                radius=radius,
+                sort=sort,
+            )
+            logger.info("URL построен: %s", catalog_url)
+
+        # Определяем нужны ли механические фильтры
+        need_mechanical = any([
+            year_from is not None,
+            year_to is not None,
+            mileage_from is not None,
+            mileage_to is not None,
+            engine_volumes,
+            transmission_mechanical,
+            drive,
+            power_from is not None,
+            power_to is not None,
+            turbo is not None,
+            seller_type,
+        ])
+
+        # Переходим на страницу каталога
+        await navigate_to_catalog(
+            page,
+            catalog_url,
             sort=sort,
+            start_page=start_page,
+            timeout=load_timeout,
         )
-        logger.info("URL построен: %s", catalog_url)
-
-    # Определяем нужны ли механические фильтры
-    need_mechanical = any([
-        year_from is not None,
-        year_to is not None,
-        mileage_from is not None,
-        mileage_to is not None,
-        engine_volumes,
-        transmission_mechanical,
-        drive,
-        power_from is not None,
-        power_to is not None,
-        turbo is not None,
-        seller_type,
-    ])
-
-    # Переходим на страницу каталога
-    await navigate_to_catalog(
-        page,
-        catalog_url,
-        sort=sort,
-        start_page=start_page,
-        timeout=load_timeout,
-    )
 
     # Проверяем состояние и решаем капчу после навигации (ОДНА проверка)
     state = await detect_page_state(page)
@@ -687,10 +696,11 @@ async def _continue_parsing(
             # Уже всё обработано
             return prev_result
 
-    # Продолжаем парсинг
+    # Продолжаем парсинг с _skip_navigation=True
+    # URL не нужен — берётся из page.url (уже содержит параметр f с фильтрами)
     continuation = await parse_catalog(
         new_page,
-        prev_result._catalog_url,
+        url=None,
         fields=prev_result._fields,
         max_pages=remaining_pages,
         sort=prev_result._sort,
@@ -699,6 +709,7 @@ async def _continue_parsing(
         max_captcha_attempts=prev_result._max_captcha_attempts,
         load_timeout=prev_result._load_timeout,
         load_retries=prev_result._load_retries,
+        _skip_navigation=True,
     )
 
     # Объединяем результаты
