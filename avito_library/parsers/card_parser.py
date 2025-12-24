@@ -19,6 +19,7 @@ from avito_library.detectors import (
     detect_page_state,
     CAPTCHA_DETECTOR_ID,
     CARD_FOUND_DETECTOR_ID,
+    NOT_DETECTED_STATE_ID,
     PROXY_AUTH_DETECTOR_ID,
     PROXY_BLOCK_403_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
@@ -309,14 +310,14 @@ async def parse_card(
         if solved:
             state = await detect_page_state(page)
 
-            # Ранний выход при критических ошибках (проблема 1)
+            # Критические ошибки — сразу возвращаем результат
             if state in (PROXY_BLOCK_403_DETECTOR_ID, PROXY_AUTH_DETECTOR_ID):
                 return CardParseResult(status=CardParseStatus.PROXY_BLOCKED)
 
             if state == REMOVED_DETECTOR_ID:
                 return CardParseResult(status=CardParseStatus.NOT_FOUND)
 
-            # Выход при любом не-капча состоянии (проблема 3)
+            # Выход из цикла при любом не-капча состоянии
             if state not in _CAPTCHA_STATES:
                 break
 
@@ -335,15 +336,11 @@ async def parse_card(
     if state in _CAPTCHA_STATES:
         return CardParseResult(status=CardParseStatus.CAPTCHA_FAILED)
 
-    # NOT_DETECTED или неизвестный детектор
+    if state == NOT_DETECTED_STATE_ID:
+        return CardParseResult(status=CardParseStatus.PAGE_NOT_DETECTED)
+
+    # Неизвестный детектор (не должно произойти)
     return CardParseResult(status=CardParseStatus.PAGE_NOT_DETECTED)
-
-
-def _is_card_html(soup: BeautifulSoup) -> bool:
-    """Uses card_found_detector logic to ensure card markup is present."""
-
-    locator = soup.select_one('span[data-marker="item-view/item-id"]')
-    return locator is not None
 
 
 def _extract_text(node) -> Optional[str]:
