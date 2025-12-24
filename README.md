@@ -371,6 +371,7 @@ async def parse_catalog(
 |----------|-----|--------------|----------|
 | `max_pages` | `int \| None` | `None` | Лимит страниц (None = без лимита) |
 | `start_page` | `int` | `1` | Начальная страница |
+| `single_page` | `bool` | `False` | Режим одной страницы (см. ниже) |
 | `include_html` | `bool` | `False` | Сохранять HTML карточек |
 | `max_captcha_attempts` | `int` | `30` | Макс. попыток решения капчи |
 | `load_timeout` | `int` | `180000` | Таймаут загрузки страницы (мс) |
@@ -477,6 +478,68 @@ result = await parse_catalog(
 )
 ```
 
+### Режим single_page
+
+Режим `single_page=True` предназначен для упрощённого парсинга одной страницы каталога без инфраструктуры продолжения.
+
+**Когда использовать:**
+- Нужна только одна страница результатов
+- Не нужна возможность автоматического продолжения при ошибках
+- Хочется упрощённый API без лишних полей
+
+**Поведение:**
+- Парсится ровно одна страница (первая)
+- Приватные поля результата остаются пустыми
+- `resume_url` всегда `None`
+- Метод `continue_from()` выбрасывает `ValueError`
+
+**Пример:**
+
+```python
+result = await parse_catalog(
+    page,
+    url="https://www.avito.ru/moskva/telefony",
+    fields=["item_id", "title", "price"],
+    single_page=True,
+)
+
+if result.status == CatalogParseStatus.SUCCESS:
+    print(f"Спарсено {len(result.listings)} карточек")
+else:
+    print(f"Ошибка: {result.status}")
+```
+
+**С фильтрами:**
+
+```python
+result = await parse_catalog(
+    page,
+    category="avtomobili",
+    city="moskva",
+    brand="bmw",
+    year_from=2018,
+    drive=["Полный"],
+    fields=["item_id", "title", "price"],
+    single_page=True,
+)
+```
+
+**Ограничения:**
+
+При `single_page=True` запрещены:
+- `max_pages` — выбросит `ValueError("max_pages нельзя указывать при single_page=True")`
+- `start_page > 1` — выбросит `ValueError("start_page нельзя указывать при single_page=True")`
+
+**Сравнение single_page=True vs max_pages=1:**
+
+| Аспект | `single_page=True` | `max_pages=1` |
+|--------|-------------------|---------------|
+| Количество страниц | 1 | 1 |
+| `continue_from()` | Недоступен (ValueError) | Доступен |
+| `resume_url` | Всегда `None` | Заполнен при ошибке |
+| Использование памяти | Меньше | Больше |
+| Сценарий | Быстро спарсить одну страницу | Парсить с возможностью продолжения |
+
 ### Модель CatalogParseResult
 
 Результат парсинга каталога.
@@ -509,6 +572,8 @@ if result.status == CatalogParseStatus.PROXY_BLOCKED:
     new_page = await browser.new_page(proxy={"server": "http://new-proxy:8080"})
     result = await result.continue_from(new_page)
 ```
+
+**Ограничение:** Метод недоступен при `single_page=True` — выбросит `ValueError("Невозможно продолжить парсинг: результат получен в режиме single_page")`.
 
 ### Enum CatalogParseStatus
 

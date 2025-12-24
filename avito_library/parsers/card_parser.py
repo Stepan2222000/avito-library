@@ -7,15 +7,29 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Iterable, Optional
 from urllib.parse import unquote
 
 import httpx
 from bs4 import BeautifulSoup
+from playwright.async_api import Page, Response
+
+from avito_library.detectors import (
+    detect_page_state,
+    CAPTCHA_DETECTOR_ID,
+    CARD_FOUND_DETECTOR_ID,
+    PROXY_AUTH_DETECTOR_ID,
+    PROXY_BLOCK_403_DETECTOR_ID,
+    PROXY_BLOCK_429_DETECTOR_ID,
+    CONTINUE_BUTTON_DETECTOR_ID,
+    REMOVED_DETECTOR_ID,
+)
+from avito_library.capcha import resolve_captcha_flow
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["CardData", "CardParsingError", "parse_card"]
+__all__ = ["CardData", "CardParsingError", "parse_card", "CardParseStatus", "CardParseResult"]
 
 
 class CardParsingError(RuntimeError):
@@ -37,6 +51,22 @@ class CardData:
     images_urls: Optional[list[str]] = None
     images_errors: Optional[list[str]] = None
     raw_html: Optional[str] = None
+
+
+class CardParseStatus(Enum):
+    """Статус результата парсинга карточки."""
+    SUCCESS = "success"
+    CAPTCHA_FAILED = "captcha_failed"
+    PROXY_BLOCKED = "proxy_blocked"
+    NOT_FOUND = "not_found"
+    PAGE_NOT_DETECTED = "page_not_detected"
+
+
+@dataclass(slots=True)
+class CardParseResult:
+    """Результат парсинга карточки."""
+    status: CardParseStatus
+    data: Optional[CardData] = None
 
 
 _SUPPORTED_FIELDS = {
@@ -170,24 +200,18 @@ async def _download_images(
     return images, errors
 
 
-async def parse_card(
+async def _parse_card_html(
     html: str,
     *,
     fields: Iterable[str],
-    ensure_card: bool = True,
     include_html: bool = False,
 ) -> CardData:
-    """Parses Avito card HTML and returns populated CardData."""
-
-
+    """Парсит HTML карточки и возвращает CardData."""
     if not isinstance(html, str) or not html.strip():
         raise ValueError("html must be a non-empty string")
 
     requested_fields = {field for field in fields if field in _SUPPORTED_FIELDS}
     soup = BeautifulSoup(html, "lxml")
-
-    if ensure_card and not _is_card_html(soup):
-        raise CardParsingError("HTML is not recognized as an Avito card")
 
     data = CardData()
 
@@ -237,6 +261,82 @@ async def parse_card(
         data.raw_html = html
 
     return data
+
+
+# Состояния, при которых решаем капчу
+_CAPTCHA_STATES = frozenset({
+    CAPTCHA_DETECTOR_ID,
+    PROXY_BLOCK_429_DETECTOR_ID,
+    CONTINUE_BUTTON_DETECTOR_ID,
+})
+
+
+async def parse_card(
+    page: Page,
+    last_response: Response,
+    *,
+    fields: Iterable[str],
+    max_captcha_attempts: int = 30,
+    include_html: bool = False,
+) -> CardParseResult:
+    """
+    Парсит карточку объявления с автоматической обработкой состояний.
+
+    Функция получает Playwright Page с уже открытой страницей карточки,
+    автоматически детектирует состояние страницы, решает капчу при
+    необходимости и возвращает результат со статусом.
+
+    Args:
+        page: Playwright Page с уже открытой страницей карточки.
+        last_response: Response от навигации (goto).
+        fields: Какие поля парсить (из CardData).
+        max_captcha_attempts: Максимум попыток решения капчи (по умолчанию 30).
+        include_html: Включить raw_html в результат.
+
+    Returns:
+        CardParseResult с полями:
+        - status: CardParseStatus (SUCCESS, CAPTCHA_FAILED, PROXY_BLOCKED, NOT_FOUND, PAGE_NOT_DETECTED)
+        - data: CardData при SUCCESS, None при ошибке
+    """
+    # 1. Детектируем начальное состояние
+    state = await detect_page_state(page, last_response=last_response)
+
+    # 2. Цикл решения капчи если нужно
+    captcha_attempts = 0
+    while state in _CAPTCHA_STATES and captcha_attempts < max_captcha_attempts:
+        captcha_attempts += 1
+        _, solved = await resolve_captcha_flow(page, max_attempts=1)
+        if solved:
+            state = await detect_page_state(page)
+
+            # Ранний выход при критических ошибках (проблема 1)
+            if state in (PROXY_BLOCK_403_DETECTOR_ID, PROXY_AUTH_DETECTOR_ID):
+                return CardParseResult(status=CardParseStatus.PROXY_BLOCKED)
+
+            if state == REMOVED_DETECTOR_ID:
+                return CardParseResult(status=CardParseStatus.NOT_FOUND)
+
+            # Выход при любом не-капча состоянии (проблема 3)
+            if state not in _CAPTCHA_STATES:
+                break
+
+    # 3. Обработка финального состояния
+    if state == CARD_FOUND_DETECTOR_ID:
+        html = await page.content()
+        data = await _parse_card_html(html, fields=fields, include_html=include_html)
+        return CardParseResult(status=CardParseStatus.SUCCESS, data=data)
+
+    if state in (PROXY_BLOCK_403_DETECTOR_ID, PROXY_AUTH_DETECTOR_ID):
+        return CardParseResult(status=CardParseStatus.PROXY_BLOCKED)
+
+    if state == REMOVED_DETECTOR_ID:
+        return CardParseResult(status=CardParseStatus.NOT_FOUND)
+
+    if state in _CAPTCHA_STATES:
+        return CardParseResult(status=CardParseStatus.CAPTCHA_FAILED)
+
+    # NOT_DETECTED или неизвестный детектор
+    return CardParseResult(status=CardParseStatus.PAGE_NOT_DETECTED)
 
 
 def _is_card_html(soup: BeautifulSoup) -> bool:

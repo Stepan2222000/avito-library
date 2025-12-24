@@ -26,7 +26,7 @@ from .detectors import (
     detect_page_state,
 )
 from .install_browser import install_playwright_chromium
-from .parsers import CardData, CardParsingError, parse_card
+from .parsers import CardData, CardParsingError, parse_card, CardParseStatus, CardParseResult
 from .parsers.catalog_parser import (
     CatalogListing,
     CatalogParseMeta,
@@ -68,6 +68,8 @@ __all__ = [
     "CardData",
     "CardParsingError",
     "parse_card",
+    "CardParseStatus",
+    "CardParseResult",
     "CatalogListing",
     "CatalogParseMeta",
     "CatalogParseResult",

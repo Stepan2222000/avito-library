@@ -240,6 +240,7 @@ async def parse_catalog(
     fields: Iterable[str],
     max_pages: int | None = None,
     start_page: int = 1,
+    single_page: bool = False,
     include_html: bool = False,
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
@@ -325,6 +326,15 @@ async def parse_catalog(
     fields_set = set(fields)
     listings: list[CatalogListing] = []
     processed_pages = 0
+
+    # === Валидация single_page режима ===
+    if single_page:
+        if max_pages is not None:
+            raise ValueError("max_pages нельзя указывать при single_page=True")
+        if start_page > 1:
+            raise ValueError("start_page нельзя указывать при single_page=True")
+        max_pages = 1
+        logger.info("Режим single_page: парсинг одной страницы")
 
     # === Логика построения URL и применения фильтров ===
 
@@ -437,6 +447,7 @@ async def parse_catalog(
                     max_captcha_attempts=max_captcha_attempts,
                     load_timeout=load_timeout,
                     load_retries=load_retries,
+                    single_page=single_page,
                 )
 
     if state in _CAPTCHA_STATES:
@@ -456,6 +467,7 @@ async def parse_catalog(
             max_captcha_attempts=max_captcha_attempts,
             load_timeout=load_timeout,
             load_retries=load_retries,
+            single_page=single_page,
         )
 
     if state in _CRITICAL_STATES:
@@ -475,6 +487,7 @@ async def parse_catalog(
             max_captcha_attempts=max_captcha_attempts,
             load_timeout=load_timeout,
             load_retries=load_retries,
+            single_page=single_page,
         )
 
     # Применяем механические фильтры если нужно
@@ -529,6 +542,7 @@ async def parse_catalog(
                 max_captcha_attempts=max_captcha_attempts,
                 load_timeout=load_timeout,
                 load_retries=load_retries,
+                single_page=single_page,
             )
 
         # Успех — накапливаем карточки
@@ -576,6 +590,7 @@ async def parse_catalog(
                         max_captcha_attempts=max_captcha_attempts,
                         load_timeout=load_timeout,
                         load_retries=load_retries,
+                        single_page=single_page,
                     )
                 # Пробуем ещё раз
 
@@ -597,6 +612,7 @@ async def parse_catalog(
         max_captcha_attempts=max_captcha_attempts,
         load_timeout=load_timeout,
         load_retries=load_retries,
+        single_page=single_page,
     )
 
 
@@ -621,6 +637,7 @@ def _build_result(
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
     load_retries: int = 5,
+    single_page: bool = False,
 ) -> CatalogParseResult:
     """Собирает CatalogParseResult со всеми полями."""
     meta = CatalogParseMeta(
@@ -630,6 +647,29 @@ def _build_result(
         last_state=error_state,
         last_url=error_url or resume_url,
     )
+
+    # При single_page=True приватные поля остаются пустыми/дефолтными
+    if single_page:
+        return CatalogParseResult(
+            status=status,
+            listings=listings,
+            meta=meta,
+            error_state=error_state,
+            error_url=error_url,
+            resume_url=None,
+            resume_page_number=None,
+            _catalog_url="",
+            _fields=set(),
+            _max_pages=None,
+            _sort=None,
+            _start_page=1,
+            _include_html=False,
+            _max_captcha_attempts=30,
+            _load_timeout=180_000,
+            _load_retries=5,
+            _processed_pages=0,
+            _single_page=True,
+        )
 
     return CatalogParseResult(
         status=status,
@@ -649,6 +689,7 @@ def _build_result(
         _load_timeout=load_timeout,
         _load_retries=load_retries,
         _processed_pages=processed_pages,
+        _single_page=False,
     )
 
 

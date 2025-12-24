@@ -1059,7 +1059,7 @@
     "h_content": "dfde396ebae7904e6b675cba8b4bf6806d4fc2327557112714304e6af5e0fb9cc2502f698eb7c7ee6a474f05be8bcdd99eee132807725e15803880bdff25dd23",
     "offset": 222,
     "definitely": true,
-    "fail_count": 0
+    "fail_count": 1
   },
   {
     "h_content": "4fe24af0e0b20149a3468cc57e063c0b75cfb96ebdb3b53eaabd2d169fbe48b98232fd33919f1caf181ff75df2cf63be4e9503146a65c7afb8e17c979436f905",
@@ -5175,7 +5175,7 @@
     "h_content": "3061536098cfd3dcbac1f278721f9815228f58e8438600572d03cfb3602ec42d9a05db73cc8f48ca597c4532c4f15d142e103e678bc10419c76edd58ea5e41d8",
     "offset": 193,
     "definitely": true,
-    "fail_count": 0
+    "fail_count": 1
   },
   {
     "h_content": "52c6bf0322decc3cecbe85258f935fef373a37334ebc00753075c889e5da9592c085b063e13e6c58b649dfd4df747fc2993200f56f57a19c6722dac5cd22aef6",
@@ -5595,7 +5595,7 @@
     "h_content": "4141d3794c7b42634d848086fa8669ba75c3cb2cde367872933c69e920404f938b8dfea7f026e3907b8e3a4cce1247c12047bf0679a5ce939f65eebeb3157ecc",
     "offset": 196,
     "definitely": true,
-    "fail_count": 0
+    "fail_count": 1
   },
   {
     "h_content": "21710d667e5912bfe42692cecf65541d558e959063906429f32518b328c02824a95cd4e9a2ffff3f23ed17726a172f92441bb0f92bce4e3edf3c3864b86bb86a",

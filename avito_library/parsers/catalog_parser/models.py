@@ -103,6 +103,7 @@ class CatalogParseResult:
     _load_timeout: int = field(default=180_000, repr=False)
     _load_retries: int = field(default=5, repr=False)
     _processed_pages: int = field(default=0, repr=False)
+    _single_page: bool = field(default=False, repr=False)
 
     async def continue_from(
         self,
@@ -123,7 +124,16 @@ class CatalogParseResult:
 
         Returns:
             Новый CatalogParseResult с объединёнными данными.
+
+        Raises:
+            ValueError: Если результат получен в режиме single_page.
         """
+        # Проверка режима single_page
+        if self._single_page:
+            raise ValueError(
+                "Невозможно продолжить парсинг: результат получен в режиме single_page"
+            )
+
         # Отложенный импорт для избежания циклической зависимости
         from .catalog_parser_v2 import _continue_parsing
 

@@ -355,8 +355,8 @@ async def _click_show_button(page: Page) -> None:
                 if re.search(r"\d+.*объявлен", text):
                     await btn.scroll_into_view_if_needed()
 
-                    async with page.expect_navigation(timeout=15000):
-                        await btn.click()
+                    await btn.click()
+                    await page.wait_for_timeout(2000)
 
                     logger.info("Кликнули кнопку: %s", text.strip()[:50])
                     return

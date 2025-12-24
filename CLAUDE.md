@@ -41,9 +41,11 @@ avito-library/
     │   │
     │   └── catalog_parser/                 # Подпакет парсера каталога
     │       ├── __init__.py                 # Экспорт функций
-    │       ├── catalog_parser.py           # Основной парсер каталога
+    │       ├── catalog_parser_v2.py        # Основной парсер каталога v2
     │       ├── models.py                   # Модели данных
     │       ├── helpers.py                  # Вспомогательные функции
+    │       ├── mechanical_filters.py       # UI-фильтры через Playwright
+    │       ├── constants.py                # Допустимые значения фильтров
     │       └── steam.py                    # Оркестратор повторных попыток
     │
     ├── capcha/                             # Решение Geetest-капчи
@@ -124,14 +126,21 @@ parse_card(html, *, fields, ensure_card=True, include_html=False) -> CardData
 Парсит страницы каталога с пагинацией.
 
 ```python
-parse_catalog(page, catalog_url, *, fields, max_pages=1, sort_by_date=False, ...) -> (list[CatalogListing], CatalogParseMeta)
+parse_catalog(page, url, *, fields, max_pages=None, single_page=False, ...) -> CatalogParseResult
 ```
 
+**Режим single_page=True:**
+- Парсит ровно одну страницу без инфраструктуры продолжения
+- `continue_from()` недоступен (выбросит ValueError)
+- `resume_url` всегда `None`
+- Нельзя указывать `max_pages` или `start_page > 1`
+
 **Компоненты:**
-- `catalog_parser.py` — основная логика парсинга
-- `models.py` — `CatalogListing`, `CatalogParseMeta`, `CatalogParseStatus`
+- `catalog_parser_v2.py` — основная логика парсинга v2
+- `models.py` — `CatalogListing`, `CatalogParseMeta`, `CatalogParseResult`, `CatalogParseStatus`
 - `helpers.py` — скроллинг, извлечение карточек, пагинация
-- `steam.py` — оркестратор `parse_catalog_until_complete` с повторными попытками
+- `mechanical_filters.py` — применение UI-фильтров через Playwright
+- `constants.py` — допустимые значения фильтров
 
 **CatalogListing поля:** `item_id`, `title`, `price`, `snippet_text`, `location_city`, `location_area`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `promoted`, `published_ago`, `raw_html`
 
