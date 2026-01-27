@@ -663,50 +663,117 @@ async def parse_single_page(
 
 ### Функция parse_card
 
-Парсит HTML отдельной карточки объявления.
+Парсит карточку объявления с автоматической обработкой состояний страницы (капча, блокировки, ошибки).
 
 ```python
 async def parse_card(
-    html: str,
+    page: Page,
+    last_response: Response,
     *,
     fields: Iterable[str],
-    ensure_card: bool = True,
+    max_captcha_attempts: int = 30,
     include_html: bool = False,
-) -> CardData
+) -> CardParseResult
 ```
 
 **Параметры:**
 
 | Параметр | Тип | По умолчанию | Описание |
 |----------|-----|--------------|----------|
-| `html` | `str` | — | HTML страницы карточки |
+| `page` | `Page` | — | Playwright Page с уже открытой страницей карточки |
+| `last_response` | `Response` | — | Response от навигации (`page.goto()`) |
 | `fields` | `Iterable[str]` | — | Поля для извлечения |
-| `ensure_card` | `bool` | `True` | Проверять, что это карточка Avito |
+| `max_captcha_attempts` | `int` | `30` | Максимум попыток решения капчи |
 | `include_html` | `bool` | `False` | Сохранять raw_html |
 
 **Доступные поля:** `title`, `price`, `seller`, `item_id`, `published_at`, `description`, `location`, `characteristics`, `views_total`, `images`
 
-**Возвращает:** `CardData`
+**Возвращает:** `CardParseResult`
 
-**Исключение:** `CardParsingError` — если HTML не соответствует карточке Avito (при `ensure_card=True`)
+**Как работает:**
+
+1. Воркер делает навигацию на страницу карточки (`page.goto()`)
+2. Воркер передаёт `page` и `response` в `parse_card`
+3. Функция автоматически определяет состояние страницы
+4. Если капча — решает её (до `max_captcha_attempts` попыток)
+5. Возвращает результат со статусом и данными
 
 **Пример:**
 
 ```python
-from avito_library import parse_card, CardParsingError
+from avito_library import parse_card, CardParseStatus
 
-html = await page.content()
+# Воркер делает навигацию
+response = await page.goto("https://www.avito.ru/moskva/telefony/iphone_15_123456")
 
-try:
-    card = await parse_card(
-        html,
-        fields=["title", "price", "description", "images"],
-    )
-    print(f"{card.title}: {card.price} руб.")
-    print(f"Изображений: {len(card.images or [])}")
-except CardParsingError:
-    print("Это не карточка объявления")
+# Вызывает parse_card
+result = await parse_card(
+    page,
+    response,
+    fields=["title", "price", "description", "images"],
+)
+
+# Обрабатывает результат
+if result.status == CardParseStatus.SUCCESS:
+    print(f"{result.data.title}: {result.data.price} руб.")
+    print(f"Изображений: {len(result.data.images or [])}")
+
+elif result.status == CardParseStatus.PROXY_BLOCKED:
+    print("Прокси заблокирован — нужно сменить")
+
+elif result.status == CardParseStatus.CAPTCHA_FAILED:
+    print("Капча не решена")
+
+elif result.status == CardParseStatus.NOT_FOUND:
+    print("Объявление удалено или не найдено")
+
+elif result.status == CardParseStatus.PAGE_NOT_DETECTED:
+    print("Неизвестная страница")
 ```
+
+**Пример с обработкой блокировки:**
+
+```python
+async def parse_with_retry(browser, url, fields, max_retries=3):
+    for attempt in range(max_retries):
+        page = await browser.new_page()
+        response = await page.goto(url)
+
+        result = await parse_card(page, response, fields=fields)
+
+        if result.status == CardParseStatus.SUCCESS:
+            return result.data
+
+        if result.status == CardParseStatus.PROXY_BLOCKED:
+            await page.close()
+            # Создаём страницу с новым прокси
+            continue
+
+        if result.status == CardParseStatus.NOT_FOUND:
+            return None  # Объявление удалено
+
+        # Другие ошибки
+        break
+
+    return None
+```
+
+### Enum CardParseStatus
+
+| Статус | Описание |
+|--------|----------|
+| `SUCCESS` | Карточка успешно спарсена. Данные в `result.data`. |
+| `CAPTCHA_FAILED` | Капча не решена за `max_captcha_attempts` попыток. |
+| `PROXY_BLOCKED` | Прокси заблокирован (HTTP 403 или 407). Нужно сменить прокси. |
+| `NOT_FOUND` | Объявление удалено или не найдено (HTTP 404/410). |
+| `PAGE_NOT_DETECTED` | Неизвестное состояние страницы. Ни один детектор не сработал. |
+
+### Модель CardParseResult
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `status` | `CardParseStatus` | Статус парсинга |
+| `data` | `CardData \| None` | Данные карточки (только при `SUCCESS`) |
 
 ### Модель CardData
 
@@ -852,8 +919,10 @@ except SellerIdNotFound:
 | Исключение | Модуль | Описание |
 |------------|--------|----------|
 | `DetectionError` | `detectors` | Критическая ошибка детектора |
-| `CardParsingError` | `parsers` | HTML не соответствует карточке Avito |
+| `CardParsingError` | `parsers` | HTML не соответствует карточке Avito (используется внутренне) |
 | `SellerIdNotFound` | `parsers` | Не найден ID продавца |
+
+**Примечание:** Функция `parse_card` не выбрасывает исключения — она возвращает `CardParseResult` со статусом. Функция `parse_catalog` также возвращает статус в `CatalogParseResult`.
 
 ---
 
