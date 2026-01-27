@@ -22,6 +22,7 @@ from .detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
+    UNKNOWN_PAGE_DETECTOR_ID,
     NOT_DETECTED_STATE_ID,
     detect_page_state,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "PROXY_BLOCK_429_DETECTOR_ID",
     "REMOVED_DETECTOR_ID",
     "SELLER_PROFILE_DETECTOR_ID",
+    "UNKNOWN_PAGE_DETECTOR_ID",
     "press_continue_and_detect",
     "resolve_captcha_flow",
     "solve_slider_once",

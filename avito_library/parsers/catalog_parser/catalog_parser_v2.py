@@ -30,6 +30,7 @@ from avito_library.detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
+    UNKNOWN_PAGE_DETECTOR_ID,
     detect_page_state,
 )
 
@@ -165,7 +166,10 @@ async def parse_single_page(
         )
 
     # 5. Неправильная страница — ошибка в логике вызывающего кода
-    if state in _WRONG_PAGE_STATES:
+    # или unknown_page_detector (известный edge case типа "журнал")
+    if state in _WRONG_PAGE_STATES or (
+        isinstance(state, str) and state.startswith(UNKNOWN_PAGE_DETECTOR_ID)
+    ):
         return SinglePageResult(
             status=CatalogParseStatus.WRONG_PAGE,
             cards=[],

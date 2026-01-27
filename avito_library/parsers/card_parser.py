@@ -25,6 +25,7 @@ from avito_library.detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     CONTINUE_BUTTON_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
+    UNKNOWN_PAGE_DETECTOR_ID,
 )
 from avito_library.capcha import resolve_captcha_flow
 
@@ -61,6 +62,7 @@ class CardParseStatus(Enum):
     PROXY_BLOCKED = "proxy_blocked"
     NOT_FOUND = "not_found"
     PAGE_NOT_DETECTED = "page_not_detected"
+    WRONG_PAGE = "wrong_page"
 
 
 @dataclass(slots=True)
@@ -338,6 +340,10 @@ async def parse_card(
 
     if state == NOT_DETECTED_STATE_ID:
         return CardParseResult(status=CardParseStatus.PAGE_NOT_DETECTED)
+
+    # Unknown page detector — известный edge case (журнал, и т.д.)
+    if isinstance(state, str) and state.startswith(UNKNOWN_PAGE_DETECTOR_ID):
+        return CardParseResult(status=CardParseStatus.WRONG_PAGE)
 
     # Неизвестный детектор (не должно произойти)
     return CardParseResult(status=CardParseStatus.PAGE_NOT_DETECTED)

@@ -41,6 +41,10 @@ from .seller_profile_detector import (
     DETECTOR_ID as SELLER_PROFILE_DETECTOR_ID,
     seller_profile_detector,
 )
+from .unknown_page_detector import (
+    DETECTOR_ID as UNKNOWN_PAGE_DETECTOR_ID,
+    unknown_page_detector,
+)
 
 DetectorCallable = Callable[..., object]
 
@@ -54,6 +58,7 @@ DETECTOR_FUNCTIONS: dict[str, DetectorCallable] = {
     CARD_FOUND_DETECTOR_ID: card_found_detector,
     CONTINUE_BUTTON_DETECTOR_ID: continue_button_detector,
     CAPTCHA_DETECTOR_ID: captcha_geetest_detector,
+    UNKNOWN_PAGE_DETECTOR_ID: unknown_page_detector,
 }
 
 DETECTOR_DEFAULT_ORDER: tuple[str, ...] = (
@@ -66,6 +71,7 @@ DETECTOR_DEFAULT_ORDER: tuple[str, ...] = (
     CATALOG_DETECTOR_ID,
     CARD_FOUND_DETECTOR_ID,
     CONTINUE_BUTTON_DETECTOR_ID,
+    UNKNOWN_PAGE_DETECTOR_ID,
 )
 
 DETECTOR_WAIT_TIMEOUT_RESOLVERS: dict[str, Callable[..., float]] = {
@@ -90,4 +96,5 @@ __all__ = [
     "PROXY_BLOCK_429_DETECTOR_ID",
     "REMOVED_DETECTOR_ID",
     "SELLER_PROFILE_DETECTOR_ID",
+    "UNKNOWN_PAGE_DETECTOR_ID",
 ]
