@@ -28,6 +28,7 @@ from ..detectors import (
     CAPTCHA_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
+    SERVER_ERROR_5XX_DETECTOR_ID,
     detect_page_state,
     NOT_DETECTED_STATE_ID,
 )
@@ -127,6 +128,25 @@ async def collect_seller_items(
             logger.error("Seller profile detector failed: %s", exc)
             return {
                 "state": "detection_error",
+                "seller_name": None,
+                "item_ids": item_ids,
+                "pages_collected": pages_collected,
+                "is_complete": False,
+            }
+
+    # Retry при серверных ошибках 5xx (502, 503, 504)
+    if state == SERVER_ERROR_5XX_DETECTOR_ID:
+        retry_delays = (2.0, 4.0, 8.0)
+        for delay in retry_delays:
+            await sleep(delay)
+            reload_response = await page.reload()
+            state = await detect_page_state(page, last_response=reload_response, priority=[SELLER_PROFILE_DETECTOR_ID])
+            if state != SERVER_ERROR_5XX_DETECTOR_ID:
+                break
+        else:
+            # Все попытки исчерпаны — сервер недоступен
+            return {
+                "state": "server_unavailable",
                 "seller_name": None,
                 "item_ids": item_ids,
                 "pages_collected": pages_collected,

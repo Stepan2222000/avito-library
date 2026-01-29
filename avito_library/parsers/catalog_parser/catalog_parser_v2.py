@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Iterable
 
@@ -30,6 +31,7 @@ from avito_library.detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
     SELLER_PROFILE_DETECTOR_ID,
+    SERVER_ERROR_5XX_DETECTOR_ID,
     UNKNOWN_PAGE_DETECTOR_ID,
     detect_page_state,
 )
@@ -354,6 +356,7 @@ async def parse_catalog(
     if _skip_navigation:
         catalog_url = page.url
         need_mechanical = False
+        last_response = None  # Навигация уже была сделана ранее
         logger.info("Пропускаем навигацию (_skip_navigation=True), URL: %s", catalog_url)
     else:
         # Определяем transmission для URL (только если одно значение)
@@ -422,7 +425,7 @@ async def parse_catalog(
         ])
 
         # Переходим на страницу каталога
-        await navigate_to_catalog(
+        last_response = await navigate_to_catalog(
             page,
             catalog_url,
             sort=sort,
@@ -431,7 +434,37 @@ async def parse_catalog(
         )
 
     # Проверяем состояние и решаем капчу после навигации (ОДНА проверка)
-    state = await detect_page_state(page)
+    state = await detect_page_state(page, last_response=last_response)
+
+    # Retry при серверных ошибках 5xx (502, 503, 504)
+    if state == SERVER_ERROR_5XX_DETECTOR_ID:
+        retry_delays = (2.0, 4.0, 8.0)
+        for delay in retry_delays:
+            await asyncio.sleep(delay)
+            last_response = await page.reload()
+            state = await detect_page_state(page, last_response=last_response)
+            if state != SERVER_ERROR_5XX_DETECTOR_ID:
+                break
+        else:
+            # Все попытки исчерпаны — сервер недоступен
+            return _build_result(
+                status=CatalogParseStatus.SERVER_UNAVAILABLE,
+                listings=[],
+                processed_pages=0,
+                error_state=state,
+                error_url=page.url,
+                resume_url=page.url,
+                catalog_url=catalog_url,
+                fields=fields_set,
+                max_pages=max_pages,
+                sort=sort,
+                start_page=start_page,
+                include_html=include_html,
+                max_captcha_attempts=max_captcha_attempts,
+                load_timeout=load_timeout,
+                load_retries=load_retries,
+                single_page=single_page,
+            )
     captcha_attempts = 0
     while state in _CAPTCHA_STATES and captcha_attempts < max_captcha_attempts:
         captcha_attempts += 1
@@ -573,17 +606,51 @@ async def parse_catalog(
         if max_pages is not None and processed_pages >= max_pages:
             break
 
-        # Переходим на следующую страницу с retry при таймауте
+        # Переходим на следующую страницу с retry при таймауте и 5xx
         next_url = result.next_url
         load_success = False
+        nav_response = None
 
         for retry in range(load_retries):
             try:
-                await navigate_to_catalog(
+                nav_response = await navigate_to_catalog(
                     page,
                     next_url,
                     timeout=load_timeout,
                 )
+
+                # Проверяем на 5xx ошибки
+                if nav_response and 500 <= nav_response.status < 600:
+                    # Retry с exponential backoff
+                    retry_delays = (2.0, 4.0, 8.0)
+                    server_ok = False
+                    for delay in retry_delays:
+                        await asyncio.sleep(delay)
+                        nav_response = await page.reload()
+                        if nav_response and not (500 <= nav_response.status < 600):
+                            server_ok = True
+                            break
+                    if not server_ok:
+                        return _build_result(
+                            status=CatalogParseStatus.SERVER_UNAVAILABLE,
+                            listings=listings,
+                            processed_pages=processed_pages,
+                            error_state=SERVER_ERROR_5XX_DETECTOR_ID,
+                            error_url=next_url,
+                            resume_url=next_url,
+                            resume_page_number=start_page + processed_pages,
+                            catalog_url=catalog_url,
+                            fields=fields_set,
+                            max_pages=max_pages,
+                            sort=sort,
+                            start_page=start_page,
+                            include_html=include_html,
+                            max_captcha_attempts=max_captcha_attempts,
+                            load_timeout=load_timeout,
+                            load_retries=load_retries,
+                            single_page=single_page,
+                        )
+
                 load_success = True
                 break
             except PlaywrightTimeout:

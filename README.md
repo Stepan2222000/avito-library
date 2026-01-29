@@ -177,6 +177,7 @@ if state == CATALOG_DETECTOR_ID:
 | Константа | Значение | Описание |
 |-----------|----------|----------|
 | `PROXY_BLOCK_403_DETECTOR_ID` | `"proxy_block_403_detector"` | **Блокировка прокси.** HTTP 403 или блокировка IP. Необходимо сменить прокси. |
+| `SERVER_ERROR_5XX_DETECTOR_ID` | `"server_error_5xx_detector"` | Серверная ошибка (HTTP 502/503/504). Парсеры автоматически делают retry. |
 | `PROXY_BLOCK_429_DETECTOR_ID` | `"proxy_block_429_detector"` | Rate limit (HTTP 429). Часто сопровождается капчей. |
 | `PROXY_AUTH_DETECTOR_ID` | `"proxy_auth_407_detector"` | **Блокировка прокси.** HTTP 407 — прокси требует авторизацию. Необходимо сменить прокси или исправить авторизацию. |
 | `CAPTCHA_DETECTOR_ID` | `"captcha_geetest_detector"` | Geetest-капча |
@@ -215,15 +216,16 @@ if state in PROXY_BLOCKED_STATES:
 ```python
 DETECTOR_DEFAULT_ORDER = (
     "proxy_block_403_detector",      # 1. Блокировка прокси (403)
-    "proxy_block_429_detector",      # 2. Rate limit (429)
-    "proxy_auth_407_detector",       # 3. Блокировка прокси (407)
-    "captcha_geetest_detector",      # 4. Geetest-капча
-    "removed_or_not_found_detector", # 5. Удалённое объявление
-    "seller_profile_detector",       # 6. Профиль продавца
-    "catalog_page_detector",         # 7. Каталог
-    "card_found_detector",           # 8. Карточка
-    "continue_button_detector",      # 9. Кнопка "Продолжить"
-    "unknown_page_detector",         # 10. Известные edge cases (журнал и т.д.)
+    "server_error_5xx_detector",     # 2. Серверные ошибки (502/503/504)
+    "proxy_block_429_detector",      # 3. Rate limit (429)
+    "proxy_auth_407_detector",       # 4. Блокировка прокси (407)
+    "captcha_geetest_detector",      # 5. Geetest-капча
+    "removed_or_not_found_detector", # 6. Удалённое объявление
+    "seller_profile_detector",       # 7. Профиль продавца
+    "catalog_page_detector",         # 8. Каталог
+    "card_found_detector",           # 9. Карточка
+    "continue_button_detector",      # 10. Кнопка "Продолжить"
+    "unknown_page_detector",         # 11. Известные edge cases (журнал и т.д.)
 )
 ```
 
@@ -629,6 +631,7 @@ if result.status == CatalogParseStatus.PROXY_BLOCKED:
 | `LOAD_TIMEOUT` | Таймаут загрузки |
 | `CAPTCHA_FAILED` | Капча не решена |
 | `WRONG_PAGE` | Открыта не та страница |
+| `SERVER_UNAVAILABLE` | Сервер недоступен (HTTP 502/503/504). Retry исчерпаны. |
 
 ### Модель CatalogListing
 
@@ -813,6 +816,7 @@ async def parse_with_retry(browser, url, fields, max_retries=3):
 | `NOT_FOUND` | Объявление удалено или не найдено (HTTP 404/410). |
 | `PAGE_NOT_DETECTED` | Неизвестное состояние страницы. Ни один детектор не сработал. |
 | `WRONG_PAGE` | Открыта не та страница (журнал, редакционная страница и т.д.). |
+| `SERVER_UNAVAILABLE` | Сервер недоступен (HTTP 502/503/504). Retry исчерпаны. |
 
 ### Модель CardParseResult
 
@@ -942,6 +946,7 @@ async def collect_seller_items(
 - `SELLER_PROFILE_DETECTOR_ID` — успех, данные собраны
 - `"detection_error"` — ошибка детектора состояния
 - `"seller_id_not_found"` — не удалось извлечь ID продавца из HTML
+- `"server_unavailable"` — сервер недоступен (HTTP 502/503/504), retry исчерпаны
 - `NOT_DETECTED_STATE_ID` — страница не распознана
 - Любой другой ID детектора — страница распознана как другой тип (капча, блокировка и т.д.)
 

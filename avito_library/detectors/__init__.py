@@ -33,6 +33,10 @@ from .proxy_block_429_detector import (
     DETECTOR_ID as PROXY_BLOCK_429_DETECTOR_ID,
     proxy_block_429_detector,
 )
+from .server_error_5xx_detector import (
+    DETECTOR_ID as SERVER_ERROR_5XX_DETECTOR_ID,
+    server_error_5xx_detector,
+)
 from .removed_or_not_found_detector import (
     DETECTOR_ID as REMOVED_DETECTOR_ID,
     removed_or_not_found_detector,
@@ -50,6 +54,7 @@ DetectorCallable = Callable[..., object]
 
 DETECTOR_FUNCTIONS: dict[str, DetectorCallable] = {
     PROXY_BLOCK_403_DETECTOR_ID: proxy_block_403_detector,
+    SERVER_ERROR_5XX_DETECTOR_ID: server_error_5xx_detector,
     PROXY_BLOCK_429_DETECTOR_ID: proxy_block_429_detector,
     PROXY_AUTH_DETECTOR_ID: proxy_auth_407_detector,
     REMOVED_DETECTOR_ID: removed_or_not_found_detector,
@@ -63,6 +68,7 @@ DETECTOR_FUNCTIONS: dict[str, DetectorCallable] = {
 
 DETECTOR_DEFAULT_ORDER: tuple[str, ...] = (
     PROXY_BLOCK_403_DETECTOR_ID,
+    SERVER_ERROR_5XX_DETECTOR_ID,
     PROXY_BLOCK_429_DETECTOR_ID,
     PROXY_AUTH_DETECTOR_ID,
     CAPTCHA_DETECTOR_ID,
@@ -96,5 +102,6 @@ __all__ = [
     "PROXY_BLOCK_429_DETECTOR_ID",
     "REMOVED_DETECTOR_ID",
     "SELLER_PROFILE_DETECTOR_ID",
+    "SERVER_ERROR_5XX_DETECTOR_ID",
     "UNKNOWN_PAGE_DETECTOR_ID",
 ]

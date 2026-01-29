@@ -22,6 +22,7 @@ class CatalogParseStatus(Enum):
     LOAD_TIMEOUT = "load_timeout"
     CAPTCHA_FAILED = "captcha_failed"
     WRONG_PAGE = "wrong_page"
+    SERVER_UNAVAILABLE = "server_unavailable"
 
     # === Legacy статусы (для совместимости со старым catalog_parser.py) ===
     CAPTCHA_UNSOLVED = "captcha_unsolved"

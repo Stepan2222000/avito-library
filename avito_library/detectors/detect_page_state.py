@@ -46,6 +46,7 @@ async def _detect_once(
 
     last_response_detectors = {
         "proxy_block_403_detector",
+        "server_error_5xx_detector",
         "proxy_block_429_detector",
         "proxy_auth_407_detector",
         "removed_or_not_found_detector",

@@ -26,6 +26,7 @@ from avito_library.detectors import (
     PROXY_BLOCK_429_DETECTOR_ID,
     CONTINUE_BUTTON_DETECTOR_ID,
     REMOVED_DETECTOR_ID,
+    SERVER_ERROR_5XX_DETECTOR_ID,
     UNKNOWN_PAGE_DETECTOR_ID,
 )
 from avito_library.capcha import resolve_captcha_flow
@@ -75,6 +76,7 @@ class CardParseStatus(Enum):
     NOT_FOUND = "not_found"
     PAGE_NOT_DETECTED = "page_not_detected"
     WRONG_PAGE = "wrong_page"
+    SERVER_UNAVAILABLE = "server_unavailable"
 
 
 @dataclass(slots=True)
@@ -360,7 +362,20 @@ async def parse_card(
     # 1. Детектируем начальное состояние
     state = await detect_page_state(page, last_response=last_response)
 
-    # 2. Цикл решения капчи если нужно
+    # 2. Retry при серверных ошибках 5xx (502, 503, 504)
+    if state == SERVER_ERROR_5XX_DETECTOR_ID:
+        retry_delays = (2.0, 4.0, 8.0)  # Exponential backoff
+        for delay in retry_delays:
+            await asyncio.sleep(delay)
+            reload_response = await page.reload()
+            state = await detect_page_state(page, last_response=reload_response)
+            if state != SERVER_ERROR_5XX_DETECTOR_ID:
+                break
+        else:
+            # Все попытки исчерпаны — сервер недоступен
+            return CardParseResult(status=CardParseStatus.SERVER_UNAVAILABLE)
+
+    # 3. Цикл решения капчи если нужно
     captcha_attempts = 0
     while state in _CAPTCHA_STATES and captcha_attempts < max_captcha_attempts:
         captcha_attempts += 1
@@ -379,7 +394,7 @@ async def parse_card(
             if state not in _CAPTCHA_STATES:
                 break
 
-    # 3. Обработка финального состояния
+    # 4. Обработка финального состояния
     if state == CARD_FOUND_DETECTOR_ID:
         html = await page.content()
         data = await _parse_card_html(html, fields=fields, include_html=include_html)
