@@ -105,13 +105,15 @@ async def parse_catalog(
 
 | Поле | Описание | Значение при успехе | Значение при ошибке |
 |------|----------|---------------------|---------------------|
-| `status` | Статус парсинга | `CatalogParseStatus.SUCCESS` | Соответствующий статус ошибки |
+| `status` | Статус парсинга | `CatalogParseStatus.SUCCESS` или `CatalogParseStatus.EMPTY` | Соответствующий статус ошибки |
 | `listings` | Список карточек | Карточки с одной страницы | Пустой список `[]` |
 | `meta` | Метаинформация | `processed_pages=1`, `processed_cards=N` | `processed_pages=0`, `processed_cards=0` |
 | `error_state` | ID детектора при ошибке | `None` | ID детектора (например, `"proxy_block_403_detector"`) |
 | `error_url` | URL где произошла ошибка | `None` | URL страницы |
 | `resume_url` | URL для продолжения | `None` (всегда) | `None` (всегда) |
 | `resume_page_number` | Номер страницы для продолжения | `None` (всегда) | `None` (всегда) |
+
+Если каталог пуст, возвращается статус `CatalogParseStatus.EMPTY`, а `listings` будет пустым списком.
 
 **Приватные поля (пустые значения):**
 
@@ -176,7 +178,7 @@ result = await parse_catalog(
     single_page=True,
 )
 
-if result.status == CatalogParseStatus.SUCCESS:
+if result.status in {CatalogParseStatus.SUCCESS, CatalogParseStatus.EMPTY}:
     print(f"Спарсено {len(result.listings)} карточек")
     for card in result.listings:
         print(f"  {card.item_id}: {card.title}")

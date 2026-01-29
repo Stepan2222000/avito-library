@@ -124,14 +124,13 @@ async def get_next_page_url(page: Page, current_url: str) -> Tuple[bool, str | N
 
 
 def has_empty_markers(html: str) -> bool:
-    """Проверяет HTML на признаки пустого каталога или блокировки."""
+    """Проверяет HTML на признаки пустого каталога."""
 
     lower = html.lower()
     return any(
         marker in lower
         for marker in (
             "ничего не найдено",
-            "доступ ограничен",
             "ничего не найдено по вашему запросу",
         )
     )

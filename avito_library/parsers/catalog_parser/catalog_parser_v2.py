@@ -114,7 +114,7 @@ async def parse_single_page(
         ...     page,
         ...     fields=["item_id", "title", "price"],
         ... )
-        >>> if result.status == CatalogParseStatus.SUCCESS:
+        >>> if result.status in {CatalogParseStatus.SUCCESS, CatalogParseStatus.EMPTY}:
         ...     for card in result.cards:
         ...         print(card.title, card.price)
     """
@@ -194,8 +194,14 @@ async def parse_single_page(
 
         has_next, next_url = await get_next_page_url(page, current_url)
 
+        status = (
+            CatalogParseStatus.EMPTY
+            if not card_locators
+            else CatalogParseStatus.SUCCESS
+        )
+
         return SinglePageResult(
-            status=CatalogParseStatus.SUCCESS,
+            status=status,
             cards=cards,
             has_next=has_next,
             next_url=next_url,
@@ -527,7 +533,10 @@ async def parse_catalog(
         )
 
         # Ошибка — возвращаем с возможностью продолжения
-        if result.status != CatalogParseStatus.SUCCESS:
+        if result.status not in {
+            CatalogParseStatus.SUCCESS,
+            CatalogParseStatus.EMPTY,
+        }:
             return _build_result(
                 status=result.status,
                 listings=listings,
@@ -552,6 +561,9 @@ async def parse_catalog(
         # Успех — накапливаем карточки
         listings.extend(result.cards)
         processed_pages += 1
+
+        if result.status == CatalogParseStatus.EMPTY:
+            break
 
         # Нет следующей страницы
         if not result.has_next:
@@ -603,8 +615,14 @@ async def parse_catalog(
             break
 
     # Успешное завершение
+    final_status = (
+        CatalogParseStatus.EMPTY
+        if processed_pages > 0 and not listings
+        else CatalogParseStatus.SUCCESS
+    )
+
     return _build_result(
-        status=CatalogParseStatus.SUCCESS,
+        status=final_status,
         listings=listings,
         processed_pages=processed_pages,
         catalog_url=catalog_url,

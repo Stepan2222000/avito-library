@@ -15,6 +15,7 @@ class CatalogParseStatus(Enum):
 
     # === v2 статусы ===
     SUCCESS = "success"
+    EMPTY = "empty"
     PROXY_BLOCKED = "proxy_blocked"
     PROXY_AUTH_REQUIRED = "proxy_auth_required"
     PAGE_NOT_DETECTED = "page_not_detected"
@@ -23,7 +24,6 @@ class CatalogParseStatus(Enum):
     WRONG_PAGE = "wrong_page"
 
     # === Legacy статусы (для совместимости со старым catalog_parser.py) ===
-    EMPTY = "empty"
     CAPTCHA_UNSOLVED = "captcha_unsolved"
     RATE_LIMIT = "rate_limit"
     NOT_DETECTED = "not_detected"

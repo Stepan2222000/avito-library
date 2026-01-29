@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable, Optional
@@ -30,6 +31,17 @@ from avito_library.detectors import (
 from avito_library.capcha import resolve_captcha_flow
 
 logger = logging.getLogger(__name__)
+
+_DEBUG_LOG_PATH = "/Users/stepanorlov/Desktop/DONE/avito-library/.cursor/debug.log"
+_DEBUG_RUN_ID = "pre-fix"
+
+
+def _debug_log(payload: dict) -> None:
+    try:
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
+    except Exception:
+        pass
 
 __all__ = ["CardData", "CardParsingError", "parse_card", "CardParseStatus", "CardParseResult"]
 
@@ -169,6 +181,27 @@ async def _download_images(
 
                     # Валидация magic bytes
                     if not _validate_image(data):
+                        # region agent log
+                        _debug_log(
+                            {
+                                "sessionId": "debug-session",
+                                "runId": _DEBUG_RUN_ID,
+                                "hypothesisId": "H4",
+                                "location": "card_parser.py:_download_images",
+                                "message": "invalid_image_format",
+                                "data": {
+                                    "url": str(response.url),
+                                    "status_code": response.status_code,
+                                    "content_type": response.headers.get("content-type"),
+                                    "content_length": response.headers.get("content-length"),
+                                    "data_len": len(data),
+                                    "first_bytes_hex": data[:16].hex(),
+                                    "first_bytes_ascii": data[:16].decode("ascii", errors="replace"),
+                                },
+                                "timestamp": int(time.time() * 1000),
+                            }
+                        )
+                        # endregion agent log
                         return None, "Invalid image format"
 
                     return data, None
@@ -200,6 +233,29 @@ async def _download_images(
         if error:
             errors.append(f"{url}: {error}")
 
+    error_reasons: dict[str, int] = {}
+    for error in errors:
+        reason = error.rsplit(": ", 1)[-1] if ": " in error else error
+        error_reasons[reason] = error_reasons.get(reason, 0) + 1
+
+    # region agent log
+    _debug_log(
+        {
+            "sessionId": "debug-session",
+            "runId": _DEBUG_RUN_ID,
+            "hypothesisId": "H4",
+            "location": "card_parser.py:_download_images",
+            "message": "image_download_summary",
+            "data": {
+                "requested": len(urls),
+                "downloaded": len(images),
+                "errors": len(errors),
+                "error_reasons": error_reasons,
+            },
+            "timestamp": int(time.time() * 1000),
+        }
+    )
+    # endregion agent log
     return images, errors
 
 
@@ -572,12 +628,66 @@ def _parse_preloaded_state(html_text: str) -> Optional[dict]:
             else:
                 continue
 
-            return json.loads(json_str)
+            parsed = json.loads(json_str)
+            # region agent log
+            _debug_log(
+                {
+                    "sessionId": "debug-session",
+                    "runId": _DEBUG_RUN_ID,
+                    "hypothesisId": "H1",
+                    "location": "card_parser.py:_parse_preloaded_state",
+                    "message": "preloaded_state_parsed",
+                    "data": {
+                        "pattern_index": i,
+                        "raw_len": len(raw),
+                        "json_len": len(json_str),
+                        "root_type": type(parsed).__name__,
+                        "root_keys_sample": list(parsed.keys())[:6] if isinstance(parsed, dict) else None,
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+            )
+            # endregion agent log
+            return parsed
 
         except json.JSONDecodeError as e:
             logger.debug(f"JSON parse failed (pattern {i}): {e}")
+            # region agent log
+            _debug_log(
+                {
+                    "sessionId": "debug-session",
+                    "runId": _DEBUG_RUN_ID,
+                    "hypothesisId": "H1",
+                    "location": "card_parser.py:_parse_preloaded_state",
+                    "message": "preloaded_state_json_decode_error",
+                    "data": {
+                        "pattern_index": i,
+                        "raw_prefix": raw[:12],
+                        "raw_len": len(raw),
+                        "error": str(e)[:120],
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+            )
+            # endregion agent log
             continue
 
+    # region agent log
+    _debug_log(
+        {
+            "sessionId": "debug-session",
+            "runId": _DEBUG_RUN_ID,
+            "hypothesisId": "H1",
+            "location": "card_parser.py:_parse_preloaded_state",
+            "message": "preloaded_state_not_found",
+            "data": {
+                "contains_marker": "__preloadedState__" in html_text,
+                "html_len": len(html_text),
+            },
+            "timestamp": int(time.time() * 1000),
+        }
+    )
+    # endregion agent log
     return None
 
 
@@ -648,11 +758,37 @@ def _extract_images_from_html_gallery(soup: BeautifulSoup) -> list[str]:
     """Fallback: извлечение из HTML галереи (миниатюры)."""
     images: list[str] = []
     seen: set[str] = set()
+    preview_attr_counts = {
+        "src": 0,
+        "data_src": 0,
+        "data_srcset": 0,
+        "srcset": 0,
+        "data_url": 0,
+    }
+    gallery_attr_counts = {
+        "src": 0,
+        "data_src": 0,
+        "data_srcset": 0,
+        "srcset": 0,
+        "data_url": 0,
+    }
+    preview_items = soup.select('li[data-marker="image-preview/item"]')
+    gallery_imgs = []
 
     # Основной селектор
-    for li in soup.select('li[data-marker="image-preview/item"]'):
+    for li in preview_items:
         img = li.select_one("img")
         if img:
+            if img.get("src"):
+                preview_attr_counts["src"] += 1
+            if img.get("data-src"):
+                preview_attr_counts["data_src"] += 1
+            if img.get("data-srcset"):
+                preview_attr_counts["data_srcset"] += 1
+            if img.get("srcset"):
+                preview_attr_counts["srcset"] += 1
+            if img.get("data-url"):
+                preview_attr_counts["data_url"] += 1
             src = img.get("src") or img.get("data-src")
             if src and isinstance(src, str) and src not in seen:
                 images.append(src)
@@ -660,12 +796,42 @@ def _extract_images_from_html_gallery(soup: BeautifulSoup) -> list[str]:
 
     # Альтернативный селектор
     if not images:
-        for img in soup.select('div[data-marker="item-view/gallery"] img'):
+        gallery_imgs = soup.select('div[data-marker="item-view/gallery"] img')
+        for img in gallery_imgs:
+            if img.get("src"):
+                gallery_attr_counts["src"] += 1
+            if img.get("data-src"):
+                gallery_attr_counts["data_src"] += 1
+            if img.get("data-srcset"):
+                gallery_attr_counts["data_srcset"] += 1
+            if img.get("srcset"):
+                gallery_attr_counts["srcset"] += 1
+            if img.get("data-url"):
+                gallery_attr_counts["data_url"] += 1
             src = img.get("src")
             if src and isinstance(src, str) and src not in seen:
                 images.append(src)
                 seen.add(src)
 
+    # region agent log
+    _debug_log(
+        {
+            "sessionId": "debug-session",
+            "runId": _DEBUG_RUN_ID,
+            "hypothesisId": "H3",
+            "location": "card_parser.py:_extract_images_from_html_gallery",
+            "message": "html_gallery_scan",
+            "data": {
+                "preview_items": len(preview_items),
+                "preview_attrs": preview_attr_counts,
+                "gallery_items": len(gallery_imgs),
+                "gallery_attrs": gallery_attr_counts,
+                "images_found": len(images),
+            },
+            "timestamp": int(time.time() * 1000),
+        }
+    )
+    # endregion agent log
     return images
 
 
@@ -715,7 +881,29 @@ def _extract_images(soup: BeautifulSoup, html: str) -> list[str]:
                 logger.debug("Found imageUrls via recursive search")
 
         if image_urls:
+            sample_keys: list[str] = []
+            if image_urls and isinstance(image_urls, list):
+                first = image_urls[0]
+                if isinstance(first, dict):
+                    sample_keys = list(first.keys())[:6]
             urls = _extract_urls_from_image_data(image_urls)
+            # region agent log
+            _debug_log(
+                {
+                    "sessionId": "debug-session",
+                    "runId": _DEBUG_RUN_ID,
+                    "hypothesisId": "H2",
+                    "location": "card_parser.py:_extract_images",
+                    "message": "image_urls_extracted",
+                    "data": {
+                        "image_urls_len": len(image_urls) if isinstance(image_urls, list) else None,
+                        "sample_keys": sample_keys,
+                        "urls_extracted_len": len(urls),
+                    },
+                    "timestamp": int(time.time() * 1000),
+                }
+            )
+            # endregion agent log
             if urls:
                 logger.debug(f"Extracted {len(urls)} HQ image URLs from JSON")
                 return urls

@@ -27,7 +27,8 @@ install_playwright_chromium()
 - playwright
 - beautifulsoup4, lxml
 - numpy, opencv-python
-- asyncpg (опционально, для PostgreSQL-кеша капчи)
+- httpx >= 0.25.0
+- asyncpg
 
 ---
 
@@ -54,9 +55,12 @@ async def main():
             max_pages=3,
         )
 
-        if result.status == CatalogParseStatus.SUCCESS:
-            for listing in result.listings:
-                print(f"{listing.item_id}: {listing.title} - {listing.price} руб.")
+        if result.status in {CatalogParseStatus.SUCCESS, CatalogParseStatus.EMPTY}:
+            if not result.listings:
+                print("Каталог пуст")
+            else:
+                for listing in result.listings:
+                    print(f"{listing.item_id}: {listing.title} - {listing.price} руб.")
 
         await browser.close()
 
@@ -91,10 +95,14 @@ async def main():
             max_pages=5,
         )
 
-        if result.status == CatalogParseStatus.SUCCESS:
-            print(f"Найдено {len(result.listings)} объявлений")
-            for listing in result.listings:
-                print(f"{listing.title} - {listing.price:,} руб.")
+        if result.status in {CatalogParseStatus.SUCCESS, CatalogParseStatus.EMPTY}:
+            if not result.listings:
+                print("Каталог пуст")
+            else:
+                print(f"Найдено {len(result.listings)} объявлений")
+                for listing in result.listings:
+                    price_str = f"{listing.price:,} руб." if listing.price else "Цена не указана"
+                    print(f"{listing.title} - {price_str}")
         else:
             print(f"Ошибка: {result.status}")
 
@@ -106,9 +114,11 @@ asyncio.run(main())
 ### Продолжение после блокировки прокси
 
 ```python
-# При блокировке прокси — создаём новую страницу и продолжаем
+# При блокировке прокси — создаём новый browser context с другим прокси
 if result.status == CatalogParseStatus.PROXY_BLOCKED:
-    new_page = await browser.new_page(proxy={"server": "http://new-proxy:8080"})
+    # Важно: прокси задаётся на уровне browser context, не page
+    new_context = await browser.new_context(proxy={"server": "http://new-proxy:8080"})
+    new_page = await new_context.new_page()
     result = await result.continue_from(new_page)
 ```
 
@@ -155,7 +165,7 @@ async def detect_page_state(
 ```python
 from avito_library import detect_page_state, CATALOG_DETECTOR_ID
 
-response = await page.goto("https://avito.ru/moskva/telefony")
+response = await page.goto("https://www.avito.ru/moskva/telefony")
 state = await detect_page_state(page, last_response=response)
 
 if state == CATALOG_DETECTOR_ID:
@@ -175,6 +185,7 @@ if state == CATALOG_DETECTOR_ID:
 | `CATALOG_DETECTOR_ID` | `"catalog_page_detector"` | Страница каталога |
 | `CARD_FOUND_DETECTOR_ID` | `"card_found_detector"` | Карточка объявления |
 | `CONTINUE_BUTTON_DETECTOR_ID` | `"continue_button_detector"` | Кнопка "Продолжить" |
+| `UNKNOWN_PAGE_DETECTOR_ID` | `"unknown_page_detector"` | Известный edge case (журнал, редакционная страница) |
 | `NOT_DETECTED_STATE_ID` | `"not_detected"` | Ничего не определено |
 
 ### Обработка блокировки прокси
@@ -193,9 +204,10 @@ PROXY_BLOCKED_STATES = {PROXY_BLOCK_403_DETECTOR_ID, PROXY_AUTH_DETECTOR_ID}
 state = await detect_page_state(page, last_response=response)
 
 if state in PROXY_BLOCKED_STATES:
-    # Прокси заблокирован — необходимо сменить
+    # Прокси заблокирован — создаём новый context с другим прокси
     await page.close()
-    page = await browser.new_page(proxy={"server": "http://new-proxy:8080"})
+    new_context = await browser.new_context(proxy={"server": "http://new-proxy:8080"})
+    page = await new_context.new_page()
 ```
 
 ### Порядок приоритетов по умолчанию
@@ -211,6 +223,7 @@ DETECTOR_DEFAULT_ORDER = (
     "catalog_page_detector",         # 7. Каталог
     "card_found_detector",           # 8. Карточка
     "continue_button_detector",      # 9. Кнопка "Продолжить"
+    "unknown_page_detector",         # 10. Известные edge cases (журнал и т.д.)
 )
 ```
 
@@ -283,6 +296,7 @@ async def parse_catalog(
     fields: Iterable[str],
     max_pages: int | None = None,
     start_page: int = 1,
+    single_page: bool = False,
     include_html: bool = False,
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
@@ -308,7 +322,7 @@ async def parse_catalog(
    ```python
    result = await parse_catalog(
        page,
-       url="https://avito.ru/moskva/avtomobili/bmw",
+       url="https://www.avito.ru/moskva/avtomobili/bmw",
        fields=["item_id", "title", "price"],
    )
    ```
@@ -323,7 +337,7 @@ async def parse_catalog(
 | `url` | `str \| None` | Готовый URL каталога (опционально) |
 | `category` | `str` | Slug категории. **Обязателен если url не передан!** |
 | `city` | `str \| None` | Slug города. `None` = все регионы (`all`) |
-| `fields` | `Iterable[str]` | Поля для извлечения (см. CatalogListing) |
+| `fields` | `Iterable[str]` | Поля для извлечения: `item_id`, `title`, `price`, `snippet_text`, `location_city`, `location_area`, `location_extra`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `promoted`, `published_ago`, `raw_html` |
 
 #### URL-фильтры (ЧПУ-сегменты)
 
@@ -336,7 +350,7 @@ async def parse_catalog(
 | `body_type` | `str` | Тип кузова (русский) | `/sedan` |
 | `fuel_type` | `str` | Тип топлива (русский) | `/benzin` |
 | `transmission` | `list[str]` | Коробка (если 1 значение) | `/mekhanika` |
-| `condition` | `str` | Состояние (русский) | `/s_probegom` |
+| `condition` | `str` | Состояние: `"С пробегом"` или `"Новый"` | `/s_probegom`, `/novyy` |
 
 #### GET-параметры
 
@@ -344,7 +358,7 @@ async def parse_catalog(
 |----------|-----|----------|
 | `price_min` | `int` | Минимальная цена (рубли) |
 | `price_max` | `int` | Максимальная цена (рубли) |
-| `radius` | `int` | Радиус поиска: 0, 50, 100, 200, 300, 500 км |
+| `radius` | `int` | Радиус поиска: 0 (только город), 50, 100, 200, 300, 500 км |
 | `sort` | `str` | Сортировка (см. ниже) |
 
 #### Механические фильтры
@@ -413,15 +427,15 @@ async def parse_catalog(
 #### seller_type (тип продавца)
 
 ```
-Дилеры, Частные
+Все, Дилеры, Частные
 ```
 
 #### engine_volumes (объём двигателя)
 
 ```
 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
-2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.5, 4.0, 4.5,
-5.0, 5.5, 6.0, 6.5, 7.0
+2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0, 3.1, 3.2, 3.3,
+3.4, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0
 ```
 
 ### Сортировка каталога
@@ -471,10 +485,24 @@ result = await parse_catalog(
 ```python
 result = await parse_catalog(
     page,
-    url="https://avito.ru/moskva/avtomobili/bmw",
+    url="https://www.avito.ru/moskva/avtomobili/bmw",
     body_type="Седан",
     year_from=2020,
     fields=["item_id", "title", "price"],
+)
+```
+
+**Фильтр по состоянию (только новые объявления):**
+
+```python
+result = await parse_catalog(
+    page,
+    category="avtomobili",
+    city="moskva",
+    brand="bmw",
+    condition="Новый",  # Только новые объявления (не б/у)
+    fields=["item_id", "title", "price"],
+    max_pages=10,
 )
 ```
 
@@ -503,7 +531,7 @@ result = await parse_catalog(
     single_page=True,
 )
 
-if result.status == CatalogParseStatus.SUCCESS:
+if result.status in {CatalogParseStatus.SUCCESS, CatalogParseStatus.EMPTY}:
     print(f"Спарсено {len(result.listings)} карточек")
 else:
     print(f"Ошибка: {result.status}")
@@ -567,19 +595,34 @@ async def continue_from(
 ```
 
 ```python
-# При блокировке прокси — создаём новую страницу с другим прокси
+# При блокировке прокси — см. пример в разделе "Быстрый старт"
 if result.status == CatalogParseStatus.PROXY_BLOCKED:
-    new_page = await browser.new_page(proxy={"server": "http://new-proxy:8080"})
+    new_context = await browser.new_context(proxy={"server": "http://new-proxy:8080"})
+    new_page = await new_context.new_page()
     result = await result.continue_from(new_page)
 ```
 
 **Ограничение:** Метод недоступен при `single_page=True` — выбросит `ValueError("Невозможно продолжить парсинг: результат получен в режиме single_page")`.
+
+### Модель CatalogParseMeta
+
+Метаинформация по итогам парсинга каталога.
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `status` | `CatalogParseStatus` | Статус парсинга |
+| `processed_pages` | `int` | Количество обработанных страниц |
+| `processed_cards` | `int` | Количество обработанных карточек |
+| `last_state` | `str \| None` | ID последнего детектированного состояния |
+| `details` | `str \| None` | Дополнительная информация об ошибке |
+| `last_url` | `str \| None` | URL последней обработанной страницы |
 
 ### Enum CatalogParseStatus
 
 | Статус | Описание |
 |--------|----------|
 | `SUCCESS` | Успешно завершено |
+| `EMPTY` | Каталог пуст (0 объявлений) |
 | `PROXY_BLOCKED` | **Блокировка прокси** (HTTP 403). Необходимо сменить прокси. |
 | `PROXY_AUTH_REQUIRED` | **Блокировка прокси** (HTTP 407). Необходимо сменить прокси. |
 | `PAGE_NOT_DETECTED` | Состояние не определено |
@@ -620,7 +663,7 @@ async def navigate_to_catalog(
     sort: str | None = None,
     start_page: int = 1,
     timeout: int = 180_000,
-    wait_until: str = "domcontentloaded",
+    wait_until: str = "domcontentloaded",  # "load", "domcontentloaded", "networkidle", "commit"
 ) -> Response
 ```
 
@@ -631,7 +674,7 @@ from avito_library import navigate_to_catalog
 
 response = await navigate_to_catalog(
     page,
-    "https://avito.ru/moskva/telefony",
+    "https://www.avito.ru/moskva/telefony",
     sort="price_asc",  # Сначала дешёвые
     start_page=2,
 )
@@ -656,6 +699,8 @@ async def parse_single_page(
 - `cards` — список `CatalogListing`
 - `has_next` — есть ли следующая страница
 - `next_url` — URL следующей страницы
+- `error_state` — ID детектора при ошибке
+- `error_url` — URL, где произошла ошибка
 
 ---
 
@@ -767,6 +812,7 @@ async def parse_with_retry(browser, url, fields, max_retries=3):
 | `PROXY_BLOCKED` | Прокси заблокирован (HTTP 403 или 407). Нужно сменить прокси. |
 | `NOT_FOUND` | Объявление удалено или не найдено (HTTP 404/410). |
 | `PAGE_NOT_DETECTED` | Неизвестное состояние страницы. Ни один детектор не сработал. |
+| `WRONG_PAGE` | Открыта не та страница (журнал, редакционная страница и т.д.). |
 
 ### Модель CardParseResult
 
@@ -877,39 +923,50 @@ async def collect_seller_items(
 |----------|-----|--------------|----------|
 | `page` | `Page` | — | Страница профиля продавца |
 | `min_price` | `int \| None` | `8000` | Мин. цена для фильтрации |
-| `condition_titles` | `Sequence[str]` | `None` | Фильтр по состоянию ("Новое", "Б/у") |
+| `condition_titles` | `Sequence[str]` | `None` | Фильтр по badge-заголовкам из API ("Новое", "Б/у" и др.) |
 | `include_items` | `bool` | `False` | Включить детали товаров |
 | `item_fields` | `Sequence[str]` | `None` | Поля товара для извлечения |
-| `item_schema` | `dict` | `None` | Схема для вложенных полей |
+| `item_schema` | `dict` | `None` | Схема извлечения полей, например `{"price": "priceDetailed.value"}` |
 
 **Возвращает:** `SellerProfileParsingResult` (dict) с полями:
-- `state` — статус (`SELLER_PROFILE_DETECTOR_ID` при успехе)
+- `state` — статус (см. возможные значения ниже)
 - `seller_name` — имя продавца
 - `item_ids` — список ID товаров
 - `pages_collected` — обработано страниц API
 - `is_complete` — полностью ли обработаны страницы
-- `items` — детали товаров (если `include_items=True`)
+- `items` — детали товаров (если `include_items=True` или `item_fields`)
+- `item_titles` — список заголовков товаров (если `include_items=True`)
+- `items_by_id` — словарь товаров по ID (если передан `item_schema`)
 
-**Исключение:** `SellerIdNotFound` — seller_id не найден в HTML
+**Возможные значения `state`:**
+- `SELLER_PROFILE_DETECTOR_ID` — успех, данные собраны
+- `"detection_error"` — ошибка детектора состояния
+- `"seller_id_not_found"` — не удалось извлечь ID продавца из HTML
+- `NOT_DETECTED_STATE_ID` — страница не распознана
+- Любой другой ID детектора — страница распознана как другой тип (капча, блокировка и т.д.)
+
+**Исключение:** `SellerIdNotFound` — seller_id не найден в HTML (устаревшее, теперь возвращается в `state`)
 
 **Пример:**
 
 ```python
-from avito_library import collect_seller_items, SellerIdNotFound
+from avito_library import collect_seller_items, SELLER_PROFILE_DETECTOR_ID
 
-await page.goto("https://avito.ru/user/abc123/profile")
+await page.goto("https://www.avito.ru/user/abc123/profile")
 
-try:
-    result = await collect_seller_items(
-        page,
-        min_price=5000,
-        include_items=True,
-    )
+result = await collect_seller_items(
+    page,
+    min_price=5000,
+    include_items=True,
+)
 
+if result['state'] == SELLER_PROFILE_DETECTOR_ID:
     print(f"Продавец: {result['seller_name']}")
     print(f"Товаров: {len(result['item_ids'])}")
-except SellerIdNotFound:
+elif result['state'] == "seller_id_not_found":
     print("Не удалось найти ID продавца")
+else:
+    print(f"Ошибка: {result['state']}")
 ```
 
 ---
@@ -920,7 +977,7 @@ except SellerIdNotFound:
 |------------|--------|----------|
 | `DetectionError` | `detectors` | Критическая ошибка детектора |
 | `CardParsingError` | `parsers` | HTML не соответствует карточке Avito (используется внутренне) |
-| `SellerIdNotFound` | `parsers` | Не найден ID продавца |
+| `SellerIdNotFound` | `parsers` | Не найден ID продавца *(deprecated: теперь возвращается в `state`)* |
 
 **Примечание:** Функция `parse_card` не выбрасывает исключения — она возвращает `CardParseResult` со статусом. Функция `parse_catalog` также возвращает статус в `CatalogParseResult`.
 
@@ -931,9 +988,11 @@ except SellerIdNotFound:
 ### Глобальный лимит страниц
 
 ```python
-from avito_library import MAX_PAGE
+import avito_library.config
 
-# MAX_PAGE: int | None — глобальный лимит страниц каталога
+# Установить глобальный лимит страниц (для всех вызовов parse_catalog и collect_seller_items)
+avito_library.config.MAX_PAGE = 50
+
 # По умолчанию None (без лимита)
 ```
 
