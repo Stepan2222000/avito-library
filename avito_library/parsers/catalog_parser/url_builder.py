@@ -296,8 +296,19 @@ def merge_url_with_params(
             "либо поисковый запрос (?q=) в URL"
         )
 
-    # Если есть категория — строим URL через build_catalog_url
-    if has_category:
+    # ПРИОРИТЕТ: если есть query — сохраняем оригинальный URL (не теряем q=)
+    if has_query:
+        # Есть поисковый запрос — модифицируем оригинальный URL,
+        # добавляя только GET-параметры (не перестраиваем URL)
+        final_url = _add_get_params_to_url(
+            url,
+            price_min=merged.get("price_min"),
+            price_max=merged.get("price_max"),
+            radius=merged.get("radius"),
+            sort=merged.get("sort"),
+        )
+    else:
+        # Нет query, но есть category — строим URL через build_catalog_url
         final_url = build_catalog_url(
             city=merged.get("city"),
             category=merged["category"],
@@ -307,15 +318,6 @@ def merge_url_with_params(
             fuel_type=merged.get("fuel_type"),
             transmission=merged.get("transmission"),
             condition=merged.get("condition"),
-            price_min=merged.get("price_min"),
-            price_max=merged.get("price_max"),
-            radius=merged.get("radius"),
-            sort=merged.get("sort"),
-        )
-    else:
-        # Нет категории, но есть query — модифицируем оригинальный URL
-        final_url = _add_get_params_to_url(
-            url,
             price_min=merged.get("price_min"),
             price_max=merged.get("price_max"),
             radius=merged.get("radius"),
