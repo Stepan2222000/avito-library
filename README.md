@@ -306,7 +306,7 @@ async def parse_catalog(
 ) -> CatalogParseResult
 ```
 
-**Два способа вызова:**
+**Три способа вызова:**
 
 1. **С параметрами фильтрации** (рекомендуется):
    ```python
@@ -320,12 +320,23 @@ async def parse_catalog(
    )
    ```
 
-2. **С готовым URL:**
+2. **С готовым URL (с категорией):**
    ```python
    result = await parse_catalog(
        page,
        url="https://www.avito.ru/moskva/avtomobili/bmw",
        fields=["item_id", "title", "price"],
+   )
+   ```
+
+3. **С готовым URL без категории (поисковый запрос):**
+   ```python
+   # URL с ?q= параметром — категория не требуется
+   result = await parse_catalog(
+       page,
+       url="https://www.avito.ru/moskva?q=продам",
+       fields=["item_id", "title", "price"],
+       max_pages=3,
    )
    ```
 
@@ -337,9 +348,9 @@ async def parse_catalog(
 |----------|-----|----------|
 | `page` | `Page` | Playwright-страница |
 | `url` | `str \| None` | Готовый URL каталога (опционально) |
-| `category` | `str` | Slug категории. **Обязателен если url не передан!** |
+| `category` | `str` | Slug категории. **Обязателен если url не передан.** Не требуется если в URL есть `?q=` |
 | `city` | `str \| None` | Slug города. `None` = все регионы (`all`) |
-| `fields` | `Iterable[str]` | Поля для извлечения: `item_id`, `title`, `price`, `snippet_text`, `location_city`, `location_area`, `location_extra`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `promoted`, `published_ago`, `raw_html` |
+| `fields` | `Iterable[str]` | Поля для извлечения: `item_id`, `title`, `price`, `snippet_text`, `location_city`, `location_area`, `location_extra`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `promoted`, `published_ago`, `raw_html`, `images` |
 
 #### URL-фильтры (ЧПУ-сегменты)
 
@@ -463,6 +474,27 @@ result = await parse_catalog(
 )
 ```
 
+**Парсинг с изображениями:**
+
+```python
+result = await parse_catalog(
+    page,
+    category="telefony",
+    city="moskva",
+    fields=["item_id", "title", "price", "images"],
+    max_pages=1,
+)
+
+for listing in result.listings:
+    images_count = len(listing.images or [])
+    print(f"{listing.title}: {images_count} изображений")
+
+    # Сохранение изображений
+    for i, image_bytes in enumerate(listing.images or []):
+        with open(f"{listing.item_id}_{i}.jpg", "wb") as f:
+            f.write(image_bytes)
+```
+
 **С фильтрами автомобилей:**
 
 ```python
@@ -490,6 +522,27 @@ result = await parse_catalog(
     url="https://www.avito.ru/moskva/avtomobili/bmw",
     body_type="Седан",
     year_from=2020,
+    fields=["item_id", "title", "price"],
+)
+```
+
+**Поиск без категории (кросс-категорийный):**
+
+```python
+# URL с ?q= — категория не требуется
+result = await parse_catalog(
+    page,
+    url="https://www.avito.ru/moskva?q=продам",
+    price_min=5000,
+    sort="date",
+    fields=["item_id", "title", "price"],
+    max_pages=5,
+)
+
+# Также работает для всех регионов
+result = await parse_catalog(
+    page,
+    url="https://www.avito.ru/all?q=стол",
     fields=["item_id", "title", "price"],
 )
 ```
@@ -653,6 +706,9 @@ if result.status == CatalogParseStatus.PROXY_BLOCKED:
 | `promoted` | `bool` | Продвигаемое объявление |
 | `published_ago` | `str \| None` | "2 дня назад" |
 | `raw_html` | `str \| None` | HTML карточки |
+| `images` | `list[bytes] \| None` | Скачанные изображения (максимальное качество 636w) |
+| `images_urls` | `list[str] \| None` | URL изображений |
+| `images_errors` | `list[str] \| None` | Ошибки при скачивании |
 
 ### Функция navigate_to_catalog
 

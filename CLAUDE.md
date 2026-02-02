@@ -44,6 +44,8 @@ avito-library/
     │       ├── catalog_parser_v2.py        # Основной парсер каталога v2
     │       ├── models.py                   # Модели данных
     │       ├── helpers.py                  # Вспомогательные функции
+    │       ├── url_builder.py              # Построение и парсинг URL каталога
+    │       ├── navigation.py               # Навигация по страницам каталога
     │       ├── mechanical_filters.py       # UI-фильтры через Playwright
     │       ├── constants.py                # Допустимые значения фильтров
     │       └── steam.py                    # Оркестратор повторных попыток
@@ -129,6 +131,12 @@ parse_card(html, *, fields, ensure_card=True, include_html=False) -> CardData
 parse_catalog(page, url, *, fields, max_pages=None, single_page=False, ...) -> CatalogParseResult
 ```
 
+**URL без категории:**
+- Поддерживаются URL с поисковым запросом (`?q=`) без указания категории
+- Примеры: `avito.ru/moskva?q=продам`, `avito.ru/all?q=стол`
+- Avito показывает результаты из всех категорий для общих запросов
+- Параметры фильтрации (price_min, price_max, sort) добавляются к URL
+
 **Режим single_page=True:**
 - Парсит ровно одну страницу без инфраструктуры продолжения
 - `continue_from()` недоступен (выбросит ValueError)
@@ -139,6 +147,8 @@ parse_catalog(page, url, *, fields, max_pages=None, single_page=False, ...) -> C
 - `catalog_parser_v2.py` — основная логика парсинга v2
 - `models.py` — `CatalogListing`, `CatalogParseMeta`, `CatalogParseResult`, `CatalogParseStatus`
 - `helpers.py` — скроллинг, извлечение карточек, пагинация
+- `url_builder.py` — построение URL, парсинг параметров, поддержка URL без категории
+- `navigation.py` — навигация по страницам каталога
 - `mechanical_filters.py` — применение UI-фильтров через Playwright
 - `constants.py` — допустимые значения фильтров
 

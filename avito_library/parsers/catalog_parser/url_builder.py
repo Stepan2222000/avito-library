@@ -127,6 +127,7 @@ def parse_catalog_url(url: str) -> dict:
         - price_min, price_max, radius — int или None
         - sort — ключ сортировки или None
         - page — номер страницы или None
+        - query — поисковый запрос (?q=) или None
     """
     parsed = urlparse(url)
     path_parts = [p for p in parsed.path.split("/") if p]
@@ -145,6 +146,7 @@ def parse_catalog_url(url: str) -> dict:
         "radius": None,
         "sort": None,
         "page": None,
+        "query": None,
     }
 
     if not path_parts:
@@ -207,6 +209,9 @@ def parse_catalog_url(url: str) -> dict:
         except ValueError:
             pass
 
+    if "q" in query_params:
+        result["query"] = query_params["q"]
+
     return result
 
 
@@ -230,11 +235,14 @@ def merge_url_with_params(
 
     Проверяет конфликты: если в URL есть значение X, а передано Y — ValueError.
 
+    Поддерживает URL без категории, если есть поисковый запрос (?q=).
+    В этом случае URL не перестраивается, а только дополняется GET-параметрами.
+
     Returns:
         Кортеж (merged_params, final_url).
 
     Raises:
-        ValueError: При конфликте параметров или отсутствии category.
+        ValueError: При конфликте параметров или отсутствии category/query.
     """
     url_params = parse_catalog_url(url)
 
@@ -275,22 +283,82 @@ def merge_url_with_params(
         else:
             merged[param_name] = url_value
 
-    if merged.get("category") is None:
-        raise ValueError("Параметр category обязателен")
+    # Сохраняем query из URL
+    merged["query"] = url_params.get("query")
 
-    final_url = build_catalog_url(
-        city=merged.get("city"),
-        category=merged["category"],
-        brand=merged.get("brand"),
-        model=merged.get("model"),
-        body_type=merged.get("body_type"),
-        fuel_type=merged.get("fuel_type"),
-        transmission=merged.get("transmission"),
-        condition=merged.get("condition"),
-        price_min=merged.get("price_min"),
-        price_max=merged.get("price_max"),
-        radius=merged.get("radius"),
-        sort=merged.get("sort"),
-    )
+    # Проверяем: нужна либо category, либо query
+    has_category = merged.get("category") is not None
+    has_query = merged.get("query") is not None
+
+    if not has_category and not has_query:
+        raise ValueError(
+            "Требуется либо category в URL/параметрах, "
+            "либо поисковый запрос (?q=) в URL"
+        )
+
+    # Если есть категория — строим URL через build_catalog_url
+    if has_category:
+        final_url = build_catalog_url(
+            city=merged.get("city"),
+            category=merged["category"],
+            brand=merged.get("brand"),
+            model=merged.get("model"),
+            body_type=merged.get("body_type"),
+            fuel_type=merged.get("fuel_type"),
+            transmission=merged.get("transmission"),
+            condition=merged.get("condition"),
+            price_min=merged.get("price_min"),
+            price_max=merged.get("price_max"),
+            radius=merged.get("radius"),
+            sort=merged.get("sort"),
+        )
+    else:
+        # Нет категории, но есть query — модифицируем оригинальный URL
+        final_url = _add_get_params_to_url(
+            url,
+            price_min=merged.get("price_min"),
+            price_max=merged.get("price_max"),
+            radius=merged.get("radius"),
+            sort=merged.get("sort"),
+        )
 
     return merged, final_url
+
+
+def _add_get_params_to_url(
+    url: str,
+    *,
+    price_min: int | None = None,
+    price_max: int | None = None,
+    radius: int | None = None,
+    sort: str | None = None,
+) -> str:
+    """Добавляет GET-параметры к существующему URL.
+
+    Используется для URL без категории (поисковые запросы),
+    где нельзя перестроить URL через build_catalog_url().
+    """
+    parsed = urlparse(url)
+    query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+
+    if price_min is not None and "pmin" not in query_params:
+        query_params["pmin"] = str(price_min)
+    if price_max is not None and "pmax" not in query_params:
+        query_params["pmax"] = str(price_max)
+    if radius is not None and "radius" not in query_params:
+        if radius not in RADIUS_VALUES:
+            raise ValueError(
+                f"Недопустимое значение radius={radius}. "
+                f"Допустимые: {', '.join(map(str, RADIUS_VALUES))}"
+            )
+        query_params["radius"] = str(radius)
+    if sort is not None and "s" not in query_params:
+        if sort not in SORT_PARAMS:
+            raise ValueError(
+                f"Недопустимое значение sort={sort!r}. "
+                f"Допустимые: {', '.join(SORT_PARAMS.keys())}"
+            )
+        query_params["s"] = SORT_PARAMS[sort]
+
+    new_query = urlencode(query_params, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
