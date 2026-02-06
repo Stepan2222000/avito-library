@@ -6,9 +6,9 @@
 - parse_catalog() — парсинг всех страниц с пагинацией и фильтрами
 
 Поддержка фильтрации:
-- URL-фильтры: город, категория, марка, модель, кузов, топливо, коробка, состояние
+- URL-фильтры: город, категория, марка, модель, кузов, топливо, коробка
 - GET-параметры: цена, радиус, сортировка
-- Механические фильтры: год, пробег, объём, привод, мощность, турбина, продавцы
+- Механические фильтры: состояние, год, пробег, объём, привод, мощность, турбина, продавцы
 """
 
 from __future__ import annotations
@@ -231,13 +231,13 @@ async def parse_catalog(
     body_type: str | None = None,
     fuel_type: str | None = None,
     transmission: list[str] | None = None,
-    condition: str | None = None,
     # GET-параметры
     price_min: int | None = None,
     price_max: int | None = None,
     radius: int | None = None,
     sort: str | None = None,
     # Механические фильтры
+    condition: str | None = None,
     year_from: int | None = None,
     year_to: int | None = None,
     mileage_from: int | None = None,
@@ -281,7 +281,6 @@ async def parse_catalog(
         transmission: Коробка передач (["Механика"], ["Механика", "Автомат"]).
             Если одно значение — применяется через URL.
             Если несколько — применяется механически.
-        condition: Состояние ("С пробегом", "Новый").
 
         # GET-параметры:
         price_min, price_max: Диапазон цены (рубли).
@@ -289,6 +288,8 @@ async def parse_catalog(
         sort: Сортировка ("date", "price_asc", "price_desc", "mileage_asc").
 
         # Механические фильтры (применяются через Playwright):
+        condition: Состояние товара — точный текст кнопки на странице
+            (например, "С пробегом", "Новые", "Б/у"). Зависит от категории.
         year_from, year_to: Год выпуска.
         mileage_from, mileage_to: Пробег (км).
         engine_volumes: Объёмы двигателя ([2.0, 2.5]).
@@ -381,7 +382,6 @@ async def parse_catalog(
                 body_type=body_type,
                 fuel_type=fuel_type,
                 transmission=transmission_for_url,
-                condition=condition,
                 price_min=price_min,
                 price_max=price_max,
                 radius=radius,
@@ -401,7 +401,6 @@ async def parse_catalog(
                 body_type=body_type,
                 fuel_type=fuel_type,
                 transmission=transmission_for_url,
-                condition=condition,
                 price_min=price_min,
                 price_max=price_max,
                 radius=radius,
@@ -411,6 +410,7 @@ async def parse_catalog(
 
         # Определяем нужны ли механические фильтры
         need_mechanical = any([
+            condition is not None,
             year_from is not None,
             year_to is not None,
             mileage_from is not None,
@@ -538,6 +538,7 @@ async def parse_catalog(
         logger.info("Применяем механические фильтры...")
         catalog_url = await apply_mechanical_filters(
             page,
+            condition=condition,
             year_from=year_from,
             year_to=year_to,
             mileage_from=mileage_from,

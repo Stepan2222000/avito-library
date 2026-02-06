@@ -31,6 +31,7 @@ ELEMENT_TIMEOUT_MS = 10000
 async def apply_mechanical_filters(
     page: Page,
     *,
+    condition: str | None = None,
     year_from: int | None = None,
     year_to: int | None = None,
     mileage_from: int | None = None,
@@ -50,6 +51,8 @@ async def apply_mechanical_filters(
 
     Args:
         page: Playwright Page с открытым каталогом.
+        condition: Состояние товара — точный текст кнопки на странице
+            (например, "С пробегом", "Новые", "Б/у"). Зависит от категории.
         year_from, year_to: Год выпуска (от/до).
         mileage_from, mileage_to: Пробег в км (от/до).
         engine_volumes: Список объёмов двигателя (например, [2.0, 2.5]).
@@ -69,6 +72,11 @@ async def apply_mechanical_filters(
 
     # Ждём загрузки страницы (React рендеринг)
     await page.wait_for_timeout(3000)
+
+    # 0. Состояние (первым — может изменить набор доступных фильтров)
+    if condition:
+        await _fill_condition(page, condition)
+        filters_applied.append(f"condition={condition}")
 
     # 1. Год выпуска
     if year_from is not None or year_to is not None:
@@ -116,6 +124,27 @@ async def apply_mechanical_filters(
         await _click_show_button(page)
 
     return page.url
+
+
+async def _fill_condition(page: Page, condition: str) -> None:
+    """Переключает фильтр состояния товара (кнопка-таб).
+
+    На странице это radio-кнопки внутри <label> элементов.
+    Текст кнопки зависит от категории:
+    - Автомобили: "Все", "С пробегом", "Новые"
+    - Телефоны: "Любое", "Новое", "Б/у"
+    - Запчасти: "Все", "Новые", "Б/у"
+    """
+    radio = page.get_by_label(condition, exact=True).first
+
+    if not await radio.count():
+        logger.error("Фильтр состояния '%s' не найден на странице", condition)
+        raise ValueError(f"Фильтр состояния '{condition}' не найден на странице")
+
+    await radio.scroll_into_view_if_needed()
+    await page.wait_for_timeout(SCROLL_DELAY_MS)
+    await radio.click(force=True)
+    await page.wait_for_timeout(FILTER_DELAY_MS)
 
 
 async def _fill_year(page: Page, year_from: int | None, year_to: int | None) -> None:

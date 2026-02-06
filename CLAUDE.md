@@ -149,7 +149,7 @@ parse_catalog(page, url, *, fields, max_pages=None, single_page=False, ...) -> C
 - `helpers.py` — скроллинг, извлечение карточек, пагинация
 - `url_builder.py` — построение URL, парсинг параметров, поддержка URL без категории
 - `navigation.py` — навигация по страницам каталога
-- `mechanical_filters.py` — применение UI-фильтров через Playwright
+- `mechanical_filters.py` — применение UI-фильтров через Playwright (состояние, год, пробег, объём, коробка, привод, мощность, турбина, продавцы)
 - `constants.py` — допустимые значения фильтров
 
 **CatalogListing поля:** `item_id`, `title`, `price`, `snippet_text`, `location_city`, `location_area`, `seller_name`, `seller_id`, `seller_rating`, `seller_reviews`, `promoted`, `published_ago`, `raw_html`

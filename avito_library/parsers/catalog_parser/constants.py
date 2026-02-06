@@ -9,7 +9,6 @@ __all__ = [
     "BODY_TYPE_SLUGS",
     "FUEL_TYPE_SLUGS",
     "TRANSMISSION_SLUGS",
-    "CONDITION_SLUGS",
     # Допустимые значения для механических фильтров
     "DRIVE_VALUES",
     "SELLER_TYPE_VALUES",
@@ -20,7 +19,6 @@ __all__ = [
     "BODY_TYPE_SLUGS_REVERSE",
     "FUEL_TYPE_SLUGS_REVERSE",
     "TRANSMISSION_SLUGS_REVERSE",
-    "CONDITION_SLUGS_REVERSE",
     # Функция нормализации
     "normalize_value",
 ]
@@ -71,12 +69,6 @@ TRANSMISSION_SLUGS: dict[str, str] = {
     "Вариатор": "variator",
 }
 
-CONDITION_SLUGS: dict[str, str] = {
-    "С пробегом": "s_probegom",
-    "Новый": "novyy",
-}
-
-
 # =============================================================================
 # ДОПУСТИМЫЕ ЗНАЧЕНИЯ ДЛЯ МЕХАНИЧЕСКИХ ФИЛЬТРОВ
 # =============================================================================
@@ -117,14 +109,11 @@ RADIUS_VALUES: tuple[int, ...] = (
 BODY_TYPE_SLUGS_REVERSE: dict[str, str] = {v: k for k, v in BODY_TYPE_SLUGS.items()}
 FUEL_TYPE_SLUGS_REVERSE: dict[str, str] = {v: k for k, v in FUEL_TYPE_SLUGS.items()}
 TRANSMISSION_SLUGS_REVERSE: dict[str, str] = {v: k for k, v in TRANSMISSION_SLUGS.items()}
-CONDITION_SLUGS_REVERSE: dict[str, str] = {v: k for k, v in CONDITION_SLUGS.items()}
-
 # Объединённый словарь всех slug-ов для определения типа сегмента
 ALL_FILTER_SLUGS: dict[str, str] = {
     **{slug: "body_type" for slug in BODY_TYPE_SLUGS.values()},
     **{slug: "fuel_type" for slug in FUEL_TYPE_SLUGS.values()},
     **{slug: "transmission" for slug in TRANSMISSION_SLUGS.values()},
-    **{slug: "condition" for slug in CONDITION_SLUGS.values()},
 }
 
 
@@ -137,7 +126,6 @@ _LOWERCASE_MAPS: dict[int, dict[str, str]] = {
     id(BODY_TYPE_SLUGS): {k.lower(): k for k in BODY_TYPE_SLUGS},
     id(FUEL_TYPE_SLUGS): {k.lower(): k for k in FUEL_TYPE_SLUGS},
     id(TRANSMISSION_SLUGS): {k.lower(): k for k in TRANSMISSION_SLUGS},
-    id(CONDITION_SLUGS): {k.lower(): k for k in CONDITION_SLUGS},
     id(DRIVE_VALUES): {v.lower(): v for v in DRIVE_VALUES},
     id(SELLER_TYPE_VALUES): {v.lower(): v for v in SELLER_TYPE_VALUES},
 }

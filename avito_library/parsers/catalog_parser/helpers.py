@@ -9,6 +9,7 @@ from urllib.parse import parse_qsl, urljoin, urlencode, urlparse, urlunparse
 from playwright.async_api import Locator, Page
 
 from ...detectors.catalog_page_detector import CATALOG_ITEM_SELECTOR
+from ...utils.image_downloader import download_images
 from .constants import SORT_PARAMS
 from .models import CatalogListing
 
@@ -136,6 +137,56 @@ def has_empty_markers(html: str) -> bool:
     )
 
 
+async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
+    """Извлекает URL изображений максимального качества из srcset.
+
+    Парсит атрибут srcset каждого <img> внутри карточки и выбирает
+    URL с максимальным разрешением (обычно 636w).
+
+    Args:
+        card: Локатор карточки товара
+
+    Returns:
+        Список URL изображений максимального качества
+    """
+    urls: list[str] = []
+
+    imgs = await card.locator("img[srcset]").all()
+
+    for img in imgs:
+        srcset = await img.get_attribute("srcset")
+        if not srcset:
+            continue
+
+        # Парсим srcset, берём URL максимального размера
+        parts = srcset.split(",")
+        best_url: str | None = None
+        best_size = 0
+
+        for part in parts:
+            trimmed = part.strip()
+            last_space = trimmed.rfind(" ")
+            if last_space == -1:
+                continue
+
+            url = trimmed[:last_space]
+            size_str = trimmed[last_space + 1 :]
+
+            try:
+                size = int(size_str.rstrip("w"))
+            except ValueError:
+                continue
+
+            if size > best_size:
+                best_size = size
+                best_url = url
+
+        if best_url:
+            urls.append(best_url)
+
+    return urls
+
+
 async def extract_listing(
     card: Locator,
     fields: set[str],
@@ -158,6 +209,10 @@ async def extract_listing(
     promoted = False
     published_ago: str | None = None
     raw_html: str | None = None
+    # Поля для изображений
+    images: list[bytes] | None = None
+    images_urls: list[str] | None = None
+    images_errors: list[str] | None = None
 
     if "title" in fields:
         title_value = await _get_inner_text(card, 'a[data-marker="item-title"]')
@@ -193,6 +248,16 @@ async def extract_listing(
     if include_html:
         raw_html = await card.inner_html()
 
+    # Извлечение и скачивание изображений
+    if "images" in fields:
+        urls = await _extract_images_from_catalog_card(card)
+        images_urls = urls
+        if urls:
+            images, images_errors = await download_images(urls)
+        else:
+            images = []
+            images_errors = []
+
     return CatalogListing(
         item_id=item_id,
         title=title_value,
@@ -208,6 +273,9 @@ async def extract_listing(
         promoted=promoted,
         published_ago=published_ago,
         raw_html=raw_html,
+        images=images,
+        images_urls=images_urls,
+        images_errors=images_errors,
     )
 
 

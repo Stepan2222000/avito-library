@@ -10,13 +10,11 @@ from .constants import (
     BODY_TYPE_SLUGS,
     FUEL_TYPE_SLUGS,
     TRANSMISSION_SLUGS,
-    CONDITION_SLUGS,
     RADIUS_VALUES,
     ALL_FILTER_SLUGS,
     BODY_TYPE_SLUGS_REVERSE,
     FUEL_TYPE_SLUGS_REVERSE,
     TRANSMISSION_SLUGS_REVERSE,
-    CONDITION_SLUGS_REVERSE,
     normalize_value,
 )
 
@@ -39,7 +37,6 @@ def build_catalog_url(
     body_type: str | None = None,
     fuel_type: str | None = None,
     transmission: str | None = None,
-    condition: str | None = None,
     price_min: int | None = None,
     price_max: int | None = None,
     radius: int | None = None,
@@ -55,7 +52,6 @@ def build_catalog_url(
         body_type: Тип кузова (русский, например "Седан").
         fuel_type: Тип топлива (русский, например "Бензин").
         transmission: Тип коробки (русский, ТОЛЬКО ОДНО значение!).
-        condition: Состояние (русский, "С пробегом" или "Новый").
         price_min: Минимальная цена.
         price_max: Максимальная цена.
         radius: Радиус поиска (0, 50, 100, 200, 300, 500 км).
@@ -83,10 +79,6 @@ def build_catalog_url(
     if transmission:
         canonical = normalize_value(transmission, TRANSMISSION_SLUGS, "transmission")
         segments.append(TRANSMISSION_SLUGS[canonical])
-    if condition:
-        canonical = normalize_value(condition, CONDITION_SLUGS, "condition")
-        segments.append(CONDITION_SLUGS[canonical])
-
     # GET-параметры
     query_params: dict[str, str] = {}
 
@@ -123,7 +115,7 @@ def parse_catalog_url(url: str) -> dict:
     Returns:
         Словарь с извлечёнными параметрами:
         - city, category, brand, model — строки или None
-        - body_type, fuel_type, transmission, condition — русские названия или None
+        - body_type, fuel_type, transmission — русские названия или None
         - price_min, price_max, radius — int или None
         - sort — ключ сортировки или None
         - page — номер страницы или None
@@ -140,7 +132,6 @@ def parse_catalog_url(url: str) -> dict:
         "body_type": None,
         "fuel_type": None,
         "transmission": None,
-        "condition": None,
         "price_min": None,
         "price_max": None,
         "radius": None,
@@ -168,8 +159,6 @@ def parse_catalog_url(url: str) -> dict:
             result["fuel_type"] = FUEL_TYPE_SLUGS_REVERSE[clean]
         elif segment_type == "transmission":
             result["transmission"] = TRANSMISSION_SLUGS_REVERSE[clean]
-        elif segment_type == "condition":
-            result["condition"] = CONDITION_SLUGS_REVERSE[clean]
         elif result["brand"] is None:
             result["brand"] = clean
         elif result["model"] is None:
@@ -225,7 +214,6 @@ def merge_url_with_params(
     body_type: str | None = None,
     fuel_type: str | None = None,
     transmission: str | None = None,
-    condition: str | None = None,
     price_min: int | None = None,
     price_max: int | None = None,
     radius: int | None = None,
@@ -254,7 +242,6 @@ def merge_url_with_params(
         ("body_type", body_type, url_params["body_type"]),
         ("fuel_type", fuel_type, url_params["fuel_type"]),
         ("transmission", transmission, url_params["transmission"]),
-        ("condition", condition, url_params["condition"]),
         ("price_min", price_min, url_params["price_min"]),
         ("price_max", price_max, url_params["price_max"]),
         ("radius", radius, url_params["radius"]),
@@ -317,7 +304,6 @@ def merge_url_with_params(
             body_type=merged.get("body_type"),
             fuel_type=merged.get("fuel_type"),
             transmission=merged.get("transmission"),
-            condition=merged.get("condition"),
             price_min=merged.get("price_min"),
             price_max=merged.get("price_max"),
             radius=merged.get("radius"),

@@ -50,6 +50,10 @@ class CatalogListing:
     promoted: bool
     published_ago: str | None
     raw_html: str | None
+    # Поля для изображений (опциональные, требуют "images" в fields)
+    images: list[bytes] | None = None
+    images_urls: list[str] | None = None
+    images_errors: list[str] | None = None
 
 
 @dataclass(slots=True)
