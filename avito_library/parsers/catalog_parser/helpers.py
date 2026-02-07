@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl, urljoin, urlencode, urlparse, urlunparse
 from playwright.async_api import Locator, Page
 
 from ...detectors.catalog_page_detector import CATALOG_ITEM_SELECTOR
-from ...utils.image_downloader import download_images
+from ...utils.image_downloader import ImageResult, download_images
 from .constants import SORT_PARAMS
 from .models import CatalogListing
 
@@ -213,6 +213,7 @@ async def extract_listing(
     images: list[bytes] | None = None
     images_urls: list[str] | None = None
     images_errors: list[str] | None = None
+    images_results: list[ImageResult] | None = None
 
     if "title" in fields:
         title_value = await _get_inner_text(card, 'a[data-marker="item-title"]')
@@ -253,8 +254,11 @@ async def extract_listing(
         urls = await _extract_images_from_catalog_card(card)
         images_urls = urls
         if urls:
-            images, images_errors = await download_images(urls)
+            images_results = await download_images(urls)
+            images = [r.data for r in images_results if r.success and r.data]
+            images_errors = [f"{r.url}: {r.error}" for r in images_results if not r.success]
         else:
+            images_results = []
             images = []
             images_errors = []
 
@@ -276,6 +280,7 @@ async def extract_listing(
         images=images,
         images_urls=images_urls,
         images_errors=images_errors,
+        images_results=images_results,
     )
 
 

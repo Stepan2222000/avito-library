@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Optional
+from dataclasses import dataclass
 
 import httpx
 
@@ -12,11 +12,13 @@ import httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 __all__ = [
+    "ImageResult",
     "MAX_IMAGE_SIZE",
     "RETRY_DELAYS",
     "CHUNK_SIZE",
     "RETRYABLE_STATUS_CODES",
     "validate_image",
+    "detect_format",
     "download_images",
 ]
 
@@ -27,30 +29,47 @@ CHUNK_SIZE = 8192
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
+@dataclass(slots=True)
+class ImageResult:
+    """Результат скачивания одного изображения."""
+
+    url: str
+    success: bool
+    data: bytes | None = None
+    size: int = 0
+    format: str | None = None
+    error: str | None = None
+
+
+def detect_format(data: bytes) -> str | None:
+    """Определяет формат изображения по magic bytes.
+
+    Returns:
+        "jpeg", "png", "webp", "gif" или None если формат неизвестен.
+    """
+    if len(data) < 12:
+        return None
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    return None
+
+
 def validate_image(data: bytes) -> bool:
     """Проверка magic bytes изображения (JPEG, PNG, WebP, GIF)."""
-    if len(data) < 12:
-        return False
-    # JPEG: FF D8 FF
-    if data[:3] == b"\xff\xd8\xff":
-        return True
-    # PNG: 89 50 4E 47 0D 0A 1A 0A
-    if data[:8] == b"\x89PNG\r\n\x1a\n":
-        return True
-    # WebP: RIFF....WEBP
-    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
-        return True
-    # GIF: GIF87a or GIF89a
-    if data[:6] in (b"GIF87a", b"GIF89a"):
-        return True
-    return False
+    return detect_format(data) is not None
 
 
 async def download_images(
     urls: list[str],
     max_concurrent: int = 10,
     timeout: float = 15.0,
-) -> tuple[list[bytes], list[str]]:
+) -> list[ImageResult]:
     """
     Параллельно скачивает изображения.
 
@@ -60,19 +79,16 @@ async def download_images(
         timeout: Таймаут на запрос
 
     Returns:
-        (images: list[bytes], errors: list[str])
+        Список ImageResult для каждого URL (порядок соответствует входным URL).
     """
     if not urls:
-        return [], []
-
-    images: list[bytes] = []
-    errors: list[str] = []
+        return []
 
     semaphore = asyncio.Semaphore(max_concurrent)
 
     async def fetch_one(
         client: httpx.AsyncClient, url: str
-    ) -> tuple[Optional[bytes], Optional[str]]:
+    ) -> ImageResult:
         """Скачивает одно изображение с retry."""
         last_error = ""
 
@@ -93,16 +109,33 @@ async def download_images(
                     async for chunk in response.aiter_bytes(CHUNK_SIZE):
                         total += len(chunk)
                         if total > MAX_IMAGE_SIZE:
-                            return None, f"Size exceeded: {total}"
+                            return ImageResult(
+                                url=url,
+                                success=False,
+                                size=total,
+                                error=f"Size exceeded: {total}",
+                            )
                         chunks.append(chunk)
 
                     data = b"".join(chunks)
+                    fmt = detect_format(data)
 
                     # Валидация magic bytes
-                    if not validate_image(data):
-                        return None, "Invalid image format"
+                    if fmt is None:
+                        return ImageResult(
+                            url=url,
+                            success=False,
+                            size=len(data),
+                            error="Invalid image format",
+                        )
 
-                    return data, None
+                    return ImageResult(
+                        url=url,
+                        success=True,
+                        data=data,
+                        size=len(data),
+                        format=fmt,
+                    )
 
             except httpx.TimeoutException:
                 last_error = "Timeout"
@@ -112,23 +145,21 @@ async def download_images(
             if attempt < len(RETRY_DELAYS):
                 await asyncio.sleep(delay)
 
-        return None, last_error or "Unknown error"
+        return ImageResult(
+            url=url,
+            success=False,
+            error=last_error or "Unknown error",
+        )
 
     async def fetch_with_semaphore(
         client: httpx.AsyncClient, url: str, index: int
-    ) -> tuple[int, str, tuple[Optional[bytes], Optional[str]]]:
+    ) -> tuple[int, ImageResult]:
         async with semaphore:
-            return index, url, await fetch_one(client, url)
+            return index, await fetch_one(client, url)
 
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         tasks = [fetch_with_semaphore(client, url, i) for i, url in enumerate(urls)]
-        results = await asyncio.gather(*tasks)
+        raw_results = await asyncio.gather(*tasks)
 
-    # Сортируем по индексу, собираем результаты
-    for index, url, (data, error) in sorted(results):
-        if data:
-            images.append(data)
-        if error:
-            errors.append(f"{url}: {error}")
-
-    return images, errors
+    # Сортируем по индексу — порядок результатов соответствует входным URL
+    return [result for _, result in sorted(raw_results)]

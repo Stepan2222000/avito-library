@@ -29,7 +29,7 @@ from avito_library.detectors import (
     UNKNOWN_PAGE_DETECTOR_ID,
 )
 from avito_library.capcha import resolve_captcha_flow
-from avito_library.utils.image_downloader import download_images as _download_images
+from avito_library.utils.image_downloader import ImageResult, download_images as _download_images
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,7 @@ class CardData:
     images: Optional[list[bytes]] = None
     images_urls: Optional[list[str]] = None
     images_errors: Optional[list[str]] = None
+    images_results: Optional[list[ImageResult]] = None
     raw_html: Optional[str] = None
 
 
@@ -152,8 +153,11 @@ async def _parse_card_html(
         urls = _extract_images(soup, html)
         data.images_urls = urls
         if urls:
-            data.images, data.images_errors = await _download_images(urls)
+            data.images_results = await _download_images(urls)
+            data.images = [r.data for r in data.images_results if r.success and r.data]
+            data.images_errors = [f"{r.url}: {r.error}" for r in data.images_results if not r.success]
         else:
+            data.images_results = []
             data.images = []
             data.images_errors = []
 

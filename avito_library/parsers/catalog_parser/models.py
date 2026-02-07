@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
+    from ...utils.image_downloader import ImageResult
 
 
 class CatalogParseStatus(Enum):
@@ -54,6 +55,7 @@ class CatalogListing:
     images: list[bytes] | None = None
     images_urls: list[str] | None = None
     images_errors: list[str] | None = None
+    images_results: list[ImageResult] | None = None
 
 
 @dataclass(slots=True)

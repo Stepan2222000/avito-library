@@ -44,7 +44,7 @@ from .parsers.seller_profile_parser import (
     SellerProfileParsingResult,
     collect_seller_items,
 )
-from .utils import press_continue_and_detect
+from .utils import ImageResult, press_continue_and_detect, detect_format
 
 __all__ = [
     "MAX_PAGE",
@@ -65,7 +65,9 @@ __all__ = [
     "SELLER_PROFILE_DETECTOR_ID",
     "SERVER_ERROR_5XX_DETECTOR_ID",
     "UNKNOWN_PAGE_DETECTOR_ID",
+    "ImageResult",
     "press_continue_and_detect",
+    "detect_format",
     "resolve_captcha_flow",
     "solve_slider_once",
     "install_playwright_chromium",
