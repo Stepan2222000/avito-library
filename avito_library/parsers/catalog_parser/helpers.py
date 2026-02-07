@@ -18,6 +18,8 @@ NEXT_PAGE_SELECTOR = 'a[data-marker="pagination-button/nextPage"]'
 SCROLL_ATTEMPTS = 1
 SCROLL_DELAY_MS = 200
 SCROLL_SETTLE_MS = 400
+_GRADUAL_SCROLL_STEP_MS = 150
+_GRADUAL_SCROLL_SETTLE_MS = 100
 PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
 SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
@@ -76,23 +78,63 @@ def apply_start_page(url: str, start_page: int) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
-async def load_catalog_cards(page: Page) -> list[Locator]:
-    """Скроллит страницу и возвращает список локаторов карточек."""
+async def _gradual_scroll(page: Page) -> None:
+    """Постепенный скролл по странице для загрузки ленивых элементов.
 
-    previous_count = -1
-    attempts = 0
+    Avito рендерит слайдер изображений карточек только когда карточка
+    попадает в viewport (ленивый рендеринг React-компонента). Этот метод
+    прокручивает страницу с шагом в пол-viewport, чтобы каждая карточка
+    гарантированно побывала видимой и её img[srcset] отрендерились.
+    """
+    scroll_height: int = await page.evaluate("document.body.scrollHeight")
+    viewport_height: int = await page.evaluate("window.innerHeight")
+    step = max(viewport_height // 2, 300)
+
+    position = 0
+    while position < scroll_height:
+        await page.evaluate(f"window.scrollTo(0, {position})")
+        await page.wait_for_timeout(_GRADUAL_SCROLL_STEP_MS)
+        position += step
+        # Высота может измениться при динамической подгрузке
+        new_height: int = await page.evaluate("document.body.scrollHeight")
+        if new_height > scroll_height:
+            scroll_height = new_height
+
+    # Возвращаем скролл наверх
+    await page.evaluate("window.scrollTo(0, 0)")
+    await page.wait_for_timeout(_GRADUAL_SCROLL_SETTLE_MS)
+
+
+async def load_catalog_cards(
+    page: Page,
+    *,
+    preload_images: bool = False,
+) -> list[Locator]:
+    """Скроллит страницу и возвращает список локаторов карточек.
+
+    Args:
+        page: Playwright Page.
+        preload_images: Если True, используется градиентный скролл,
+            который загружает ленивые изображения карточек (React рендерит
+            слайдер только при попадании карточки в viewport).
+    """
     catalog_locator = page.locator(CATALOG_CARD_SELECTOR)
 
-    while attempts < SCROLL_ATTEMPTS:
-        attempts += 1
-        await page.wait_for_timeout(SCROLL_DELAY_MS)
-        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await page.wait_for_timeout(SCROLL_SETTLE_MS)
+    if preload_images:
+        await _gradual_scroll(page)
+    else:
+        previous_count = -1
+        attempts = 0
+        while attempts < SCROLL_ATTEMPTS:
+            attempts += 1
+            await page.wait_for_timeout(SCROLL_DELAY_MS)
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(SCROLL_SETTLE_MS)
 
-        current_count = await catalog_locator.count()
-        if current_count == previous_count:
-            break
-        previous_count = current_count
+            current_count = await catalog_locator.count()
+            if current_count == previous_count:
+                break
+            previous_count = current_count
 
     cards = await catalog_locator.all()
     filtered: list[Locator] = []
@@ -137,17 +179,25 @@ def has_empty_markers(html: str) -> bool:
     )
 
 
-async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
-    """Извлекает URL изображений максимального качества из srcset.
+_SLIDER_IMAGE_MARKER_PREFIX = "slider-image/image-"
 
-    Парсит атрибут srcset каждого <img> внутри карточки и выбирает
-    URL с максимальным разрешением (обычно 636w).
+
+async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
+    """Извлекает URL изображений из карточки каталога.
+
+    Основной путь: парсит атрибут srcset каждого <img> внутри карточки
+    и выбирает URL с максимальным разрешением (обычно 636w).
+
+    Fallback: если img[srcset] не найдены (карточка не была в viewport
+    и React не отрендерил слайдер), извлекает URL из атрибута data-marker
+    элементов <li> слайдера (формат: "slider-image/image-{URL}").
+    Fallback даёт 208w качество.
 
     Args:
         card: Локатор карточки товара
 
     Returns:
-        Список URL изображений максимального качества
+        Список URL изображений
     """
     urls: list[str] = []
 
@@ -183,6 +233,18 @@ async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
 
         if best_url:
             urls.append(best_url)
+
+    # Fallback: извлекаем URL из data-marker если srcset не отрендерился
+    if not urls:
+        lis = await card.locator(
+            f'li[data-marker^="{_SLIDER_IMAGE_MARKER_PREFIX}"]'
+        ).all()
+        for li in lis:
+            marker = await li.get_attribute("data-marker")
+            if marker and marker.startswith(_SLIDER_IMAGE_MARKER_PREFIX):
+                url = marker[len(_SLIDER_IMAGE_MARKER_PREFIX) :]
+                if url:
+                    urls.append(url)
 
     return urls
 

@@ -182,7 +182,9 @@ async def parse_single_page(
 
     # 6. Успех — парсим каталог
     if state == CATALOG_DETECTOR_ID:
-        card_locators = await load_catalog_cards(page)
+        card_locators = await load_catalog_cards(
+            page, preload_images="images" in fields_set,
+        )
         cards: list[CatalogListing] = []
 
         for locator in card_locators:
