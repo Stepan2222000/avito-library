@@ -1,0 +1,901 @@
+[
+  {
+    "timestamp": "2026-02-08T01:06:12",
+    "articulum_id": 302,
+    "listings": [
+      {
+        "avito_item_id": "7967561789",
+        "title": "Клапан турбины Mercedes W246 W212 W207 W204 S204",
+        "price": 3000,
+        "images_urls_found": 4,
+        "images_downloaded_ok": 4,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://60.img.avito.st/image/1/1.zPfig7aAYB6sKZoV9vSDoqgiYhpQNGQeUFMBGlDYa-RdIGQErCmaFVQ.tSVuvFmML9CafzAurOI5YWeZMrw4ncJFMqOATBbQIfg",
+            "success": true,
+            "size": 41968,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://40.img.avito.st/image/1/1.u6tSVLaAF0Ic_u1JKGrh_Rj1FUbg4xNC4IR2RuAPHLjt9xNYHP7tSeQ.S1d_kfEoju5YWKM4hCwbypFYEL6UcNtSLSacye5KXnw",
+            "success": true,
+            "size": 33830,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://90.img.avito.st/image/1/1.NsMFpLaAmipLDmAhZbwUlU8FmC63E54qt3T7Lrf_kdC6B54wSw5gIbM.m_xwXW1baGxxAmKac2z-Z7ydFYgnr96rPXEpJilTFn8",
+            "success": true,
+            "size": 46578,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://80.img.avito.st/image/1/1.Xuyj-baA8gXtUwgOk8QTuelY8AERTvYFESmTARGi-f8cWvYf7VMIDhU.7212wx4CcbchjODx7VlteP5nmIRgMF4ZdfEn3M6Sv1Q",
+            "success": true,
+            "size": 42484,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7893073169",
+        "title": "Турбина Mercedes M274",
+        "price": 30000,
+        "images_urls_found": 1,
+        "images_downloaded_ok": 1,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://80.img.avito.st/image/1/1.uGXJpraAFIyHDO6Htai_XoQHFoh7ERCMe3Z1iHv9H3Z2BRCWhwzuh38.0ET7xIpKaLL-CDeDcvKksb0OHKlzVQbBGizYdwzAWEI",
+            "success": true,
+            "size": 82722,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7893155518",
+        "title": "Турбина Mercedes Infiniti M274 2.0",
+        "price": 27600,
+        "images_urls_found": 1,
+        "images_downloaded_ok": 1,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://10.img.avito.st/image/1/1.iDL4p7aAJNu2Dd7Q5OX0F7UGJt9KECDbSndF30r8LyFHBCDBtg3e0E4.jM5Oij1opcc8tsdvOPuGUJ4mPehnDrVu33kKlJh9RIE?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 84796,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7935094946",
+        "title": "Коллектор турбины Mercedes W205 2.0 2740902280",
+        "price": 22400,
+        "images_urls_found": 5,
+        "images_downloaded_ok": 5,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://40.img.avito.st/image/1/1.lUyf9baAOaXRX8OuubfVRdBUO6EtQj2lLSVYoS2uMl8gVj2_0V_Drik.zIWu3W4yWDyeBzzg2prwZWop3zO7GBUGcIXApFWkqBc",
+            "success": true,
+            "size": 75657,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://60.img.avito.st/image/1/1._lUaibaAUrxUI6i3au7sWlUoULioPla8qFkzuKjSWUalKlamVCOot6w.y6DnIEnKqhL8rwtDS2FGDW0jvHtVvEhvkpzCMGlLlr0",
+            "success": true,
+            "size": 64137,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://50.img.avito.st/image/1/1.I-7tqLaAjwejAnUMp5wG56IJjQNfH4sHX3juA1_zhP1SC4sdowJ1DFs.p6t-c_HTpJDMcH_SXp11BJ0bUWwgQnMtQqJsLQlb-rY",
+            "success": true,
+            "size": 70800,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://70.img.avito.st/image/1/1.c727xraA31T1bCVf0b8XsvRn3VAJcdtUCRa-UAmd1K4EZdtO9WwlXw0.KA15__44Q_0ojwHH-xTl9EH2ErKtPtQVXZW1_wNkEfY",
+            "success": true,
+            "size": 68525,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://20.img.avito.st/image/1/1.eOEasraA1AhUGC4DZvcd7lUT1gyoBdAIqGK1DKjp3_KlEdASVBguA6w.CDZjReVx9AC2UHGjpp3GYS4qg1Cacjn2iEXzml8mh7A?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 77657,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7867489557",
+        "title": "A0001531859 Магнитный клапан (к турбокомпрессору)",
+        "price": 11526,
+        "images_urls_found": 1,
+        "images_downloaded_ok": 1,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://10.img.avito.st/image/1/1.DTqeZraAodPQzFvYiFovT9DHo9cs0aXTLLbA1yw9qikhxaXJ0Mxb2Cg.PKF0S1qY5TmgAxtxgh78uIpJz-lYBQGCZ-xiPAQd7lk?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 38322,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7815639473",
+        "title": "Клапан турбины мерседес А0001531859",
+        "price": 3500,
+        "images_urls_found": 2,
+        "images_downloaded_ok": 2,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://20.img.avito.st/image/1/1.S9sdhraA5zJTLB05B8dg7Vwn5TavMeMyr1aGNq_d7MiiJeMoUywdOas.OOx5QIJzhune6kHkTZzUbPFd2I4tMxZdTJUtl-_uG-o?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 78028,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://30.img.avito.st/image/1/1.YGJg9LaAzIsuXjaALL12UyFVzo_SQ8iL0iStj9Kvx3HfV8iRLl42gNY.qKcv8kSnnPmIPpewF9cd2VuLn1euzzXa_j_3wP0BAy0?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 62333,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7855440028",
+        "title": "Клапан электромагнитный mercedes EAG mercedes",
+        "price": 4232,
+        "images_urls_found": 1,
+        "images_downloaded_ok": 1,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://20.img.avito.st/image/1/1.U7JdK7aA_1sTgQVQd0Ii0hyK_V_vnPtb7_ueX-9w9KHiiPtBE4EFUOs.AbvAbziXeczOen_2ngs0-YdnXDPf4pUrW9lIvPXvM70?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 45794,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "7851595303",
+        "title": "Турбина Mercedes E W213 2.0 274.920",
+        "price": 30000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7909149095",
+        "title": "Турбина",
+        "price": 7000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7873374398",
+        "title": "Клапан электромагнитный Mercedes-Benz E-Class W213",
+        "price": 6100,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7761189952",
+        "title": "A0001531159 клапан турбонагнетателя (новый)",
+        "price": 5150,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7877264184",
+        "title": "Клапан турбины mercedes-benz A0001531159",
+        "price": 7500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7795441731",
+        "title": "Электромагнитный клапан турбины mercedes",
+        "price": 8500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7737558108",
+        "title": "Магнит A0001531859 mercedes-benz",
+        "price": 25481,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7715389039",
+        "title": "Клапан магнитный",
+        "price": 16909,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7781854195",
+        "title": "Турбина Mercedes A-class W177 M282 1.3TI 2018",
+        "price": 24200,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7781150073",
+        "title": "Турбина Mercedes E-class W213 M274 2.0TI 2023",
+        "price": 46000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7743433829",
+        "title": "Оригинальный магнит (шт.) A0001531859",
+        "price": 24400,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7623046090",
+        "title": "Клапан турбонагнетателя двигателя A0001531859",
+        "price": 20135,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7749621456",
+        "title": "Турбина Mercedes E-class W212 M274 2.0TI 2013",
+        "price": 26500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7628479600",
+        "title": "Оригинальные запчасти Mercedes",
+        "price": 25473,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7650365271",
+        "title": "Турбина Mercedes-Benz GLA X156 270.920 2016",
+        "price": 34950,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7637287680",
+        "title": "Клапан электромагнитный Mercedes-Benz GLC-Class",
+        "price": 7000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7601208070",
+        "title": "A0001531859 Клапан турбонагнетателя",
+        "price": 9900,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7653131210",
+        "title": "Турбина Mercedes E-class W212 M274 2.0TI 2014",
+        "price": 31100,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7569380031",
+        "title": "A0001531859 Оригинальный Клапан турбины M-Benz",
+        "price": 5400,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7599263029",
+        "title": "Электромагнитный клапан 701870060",
+        "price": 7500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7612923208",
+        "title": "Новый клапан турбины Pierburg 7.04818.04.0",
+        "price": 8800,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7584847875",
+        "title": "Клапан магнитный A0001531859 A0001531859",
+        "price": 16790,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7527072332",
+        "title": "Клапан турбонагнет. М270,274",
+        "price": 4790,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7535102923",
+        "title": "Клапан перепускной Renault Arkana JC H5H 2021",
+        "price": 3800,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7503369127",
+        "title": "Клапан турбины Mercedes-Benz A0001531859",
+        "price": 6900,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7429431754",
+        "title": "Клапан турбины соленоид Mercedes- Benz",
+        "price": 8799,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7344039468",
+        "title": "Клапан управления турбиной (актуатор) Renault 4",
+        "price": 18252,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7332854692",
+        "title": "Клапан mercedes m139 m270 m274 m282",
+        "price": 13000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7330806476",
+        "title": "Mercedes benz колодки на все виды",
+        "price": 4800,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7305780677",
+        "title": "Турбина m274 Mercedes X253 GLC 253",
+        "price": 44000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7271673420",
+        "title": "Моторчик привода дроссельной заслонки",
+        "price": 4540,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7287149942",
+        "title": "Турбина Mercedes E200 W213 274.920 2016",
+        "price": 51450,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7239982386",
+        "title": "Клапан турбонагнетателя",
+        "price": 7000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "7242276738",
+        "title": "Турбина, турбокомпрессор B-Class, W247, T247, M282",
+        "price": 24900,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "5003447995",
+        "title": "Турбонагнетатель Mercedes-Benz C-class W205 274920",
+        "price": 30000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4622505072",
+        "title": "Клапан турбины Mercedes Pierburg A0001531159",
+        "price": 8200,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4940162718",
+        "title": "Турбонагнетатель Mercedes-Benz E-class C207 274920",
+        "price": 36000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4841706905",
+        "title": "Клапан турбины A0001531859 mercedes-benz",
+        "price": 19468,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4741533366",
+        "title": "Турбина Mercedes C-class W205 M274 2.0TI 2018",
+        "price": 34500,
+        "images_urls_found": 5,
+        "images_downloaded_ok": 5,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://90.img.avito.st/image/1/1.AdWgaLaArTzuwlc3rggHlrjJrzgS36k8ErjMOBIzpsYfy6km7sJXNxY.XkbnHploHCcUoUAhd_kZEbfNR9L--J2fZe2h5OadHt8",
+            "success": true,
+            "size": 73963,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://70.img.avito.st/image/1/1.wGmtHbaAbIDjt5aLoWr3Iqq8boQfqmiAH80NhB9GZ3oSvmia47eWixs.hIlsk3svn9jHSqzjm5NKGt-FHEcG9Bxc8x3Q53Ahz-E",
+            "success": true,
+            "size": 79037,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://60.img.avito.st/image/1/1.ldiaF7aAOTHUvcM6vFXBlIK2OzUooD0xKMdYNShMMssltD0r1L3DOiw.yV31F7-SYJE_pLlfUazR90mFGoCj9ga2mumQY3P0MRM",
+            "success": true,
+            "size": 71928,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://90.img.avito.st/image/1/1.hS8ClraAKcZMPNPNBKDXYxo3K8KwIS3GsEZIwrDNIjy9NS3cTDzTzbQ.3YODA87C8_oWhplciE7ddoqGXZel7hJMYaXmLfKV3hY",
+            "success": true,
+            "size": 70537,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://50.img.avito.st/image/1/1.J_FrVLaAixgl_nETKTQcumz1iRzZ448Y2YTqHNkPgOLU948CJf5xE90.Om9zJuoeZZd80dPaxNj8B5p1HO1_LKG6iVXSzMn9oXE",
+            "success": true,
+            "size": 74073,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "4373154636",
+        "title": "Клапан магнитный A0001531859 mercedes-benz",
+        "price": 16790,
+        "images_urls_found": 1,
+        "images_downloaded_ok": 1,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://20.img.avito.st/image/1/1.fC_hB7aA0MavrSrNlRZSVYmm0sJTsNTGU9exwlNc2zxepNTcr60qzVc.iNlI5VmmSixnpJq303TFSbxB9HFcF9J2xyJVANc1LUk?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 67326,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "4514765920",
+        "title": "Клапан турбонагнетателя оригинал A0001531159",
+        "price": 27100,
+        "images_urls_found": 5,
+        "images_downloaded_ok": 5,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://00.img.avito.st/image/1/1.xSD9S7aAacmz4ZPC-zjpVfjqa81P_G3JT5sIzU8QYjNC6G3Ts-GTwks.EGlHGhIgs8T7TnRylCutziQKUQWl0TLTsJI5MGcU4f4?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 70346,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://40.img.avito.st/image/1/1.vOZC_7aAEA8MVeoENqXjk0deEgvwSBQP8C9xC_CkG_X9XBQVDFXqBPQ.0Gtwkh8IU_2-BnePFnoIcPdLGAt1UD15WDSwpbfP7_8",
+            "success": true,
+            "size": 74641,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://60.img.avito.st/image/1/1.USeIM7aA_c7GmQfFpgY6UY2S_8o6hPnOOuOcyjpo9jQ3kPnUxpkHxT4.MqNI_VpxoAlGmLOMnG1mnGpobsG_VtxqYGV7IiqesNI",
+            "success": true,
+            "size": 65212,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://20.img.avito.st/image/1/1.iTaIL7aAJd_Ghd_UlhGjQ42OJ9s6mCHfOv9E2zp0LiU3jCHFxoXf1D4.1mxllYX4jGgpJc54TMlm4eKylcF0GDRQm1fEypithvk?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 62906,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://00.img.avito.st/image/1/1.bQK2kLaAwev4Ojvg4N0KdLMxw-8EJ8XrBECg7wTLyhEJM8Xx-Do74AA.EWkuAls-jJq_NfcxNSnPYR0y-bZ1KEHF_kWd7V_CNWk?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 61042,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "5026115316",
+        "title": "Клапан электромагнитный Mercedes-Benz B-Class W246",
+        "price": 6400,
+        "images_urls_found": 5,
+        "images_downloaded_ok": 5,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://40.img.avito.st/image/1/1.0FuturaAfLLjEIa5gd20E6sbfrYfDXiyH2odth_hd0gSGXio4xCGuRs.Jf8WN4nBynhCmcupKkyIIMb-ATuuGHs_xzJuA38DJoA",
+            "success": true,
+            "size": 93667,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://20.img.avito.st/image/1/1.FEYto7aAuK9jCUKkCdtyDisCuqufFLyvn3PZq5_4s1WSALy1YwlCpJs.AH486Wpt5VM6lEkm9nUoPD_U_WuN_wF2_uuPrjw5Oh4?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 93070,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://00.img.avito.st/image/1/1.2HIFCraAdJtLoI6QOUXKOgOrdp-3vXCbt9oVn7dRf2G6qXCBS6COkLM.skisS8_01qS9e8uR0ghUAClM1R8nGylyQkjQlROlUuk?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 81887,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://10.img.avito.st/image/1/1.pv7eJbaACheQj_AcnlPqu8SECBNskg4XbPVrE2x-Ae1hhg4NkI_wHGg.u0IlK62KPAo9pGGRxq5HGJMphwInoDxx35_YC_4ZD_k?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 93496,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://20.img.avito.st/image/1/1.byY1g7aAw897KTnEZ5YEbjMiwcuHNMfPh1Oiy4fYyDWKIMfVeyk5xIM.x5uY0Ixn1spUUOLxJ1fKtONYTEzIb5iCHhfC_dIMk8s?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 67505,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "4452910386",
+        "title": "Рычаг передний Mercedes A2223305402",
+        "price": 7800,
+        "images_urls_found": 5,
+        "images_downloaded_ok": 5,
+        "images_failed": 0,
+        "images_results": [
+          {
+            "url": "https://10.img.avito.st/image/1/1.UEtBIbaA_KIPiwapbXhjDzCA_qbzlvii8_GdpvN691j-gvi4D4sGqfc.GcTmJla1EcQ8NNmiNj1_CRHCOsofUXO30KXUBvR3gLc?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 54640,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://70.img.avito.st/image/1/1.wn7LXLaAbpeF9pScw1fvJbr9bJN562qXeYwPk3kHZW10_2qNhfaUnH0.PQHopWphyZgvwTutyRBH7bIzzYCfa0Vcq0V9cpQTPgY",
+            "success": true,
+            "size": 53802,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://30.img.avito.st/image/1/1.fI9HoraA0GYJCCptM5MZ7woD0mL1FdRm9XKxYvX525z4AdR8CQgqbfE.lKZ2owAHsmpyEtjDRwLk19flnVmjo10t-kXI0vEL7ws?cqp=2.31EmCLg6ik3oatt1ttbFq_ajuGsz9wCshVqsaNgtLVVqtiwIcdxsWidTBGP4W2gjZpwuVqcdzwQCR5DnUbaoBbU1",
+            "success": true,
+            "size": 56216,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://90.img.avito.st/image/1/1.Rz4KtLaA69dEHhHcCMl_ensV6dO4A-_XuGSK07jv4C21F-_NRB4R3Lw.qDLRWrqJAqCLOtstCAT5jKvC4S23j2O-iUWzZjncJl8",
+            "success": true,
+            "size": 51475,
+            "format": "jpeg"
+          },
+          {
+            "url": "https://70.img.avito.st/image/1/1.djW9EbaA2tzzuyDX3QxMccyw2NgPpt7cD8G72A9K0SYCst7G87sg1ws._0n7pSQ2-LMKoZUSxecF2EhJI0vANLVcZ3eSR68vQys",
+            "success": true,
+            "size": 48242,
+            "format": "jpeg"
+          }
+        ]
+      },
+      {
+        "avito_item_id": "4452619096",
+        "title": "Клапан турбины Renault Arkana 1.3 turbo H5HA450",
+        "price": 5000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4485515484",
+        "title": "Турбина Mercedes CLA C118 M282 1.3TI 2018",
+        "price": 34500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4442878400",
+        "title": "Турбина Mercedes-Benz E-Class W212",
+        "price": 35000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4419535260",
+        "title": "Б/У Б/У Клапан управления турбиной (актуатор)",
+        "price": 17783,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4103582208",
+        "title": "Клапан турбонагнетателя Mercedes (А0001531859)",
+        "price": 9900,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4523809533",
+        "title": "Турбонагнетатель Mercedes-Benz E-class W212 274920",
+        "price": 36000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3976599462",
+        "title": "Клапан турбины Mercedes-Benz W176",
+        "price": 6870,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "4169714802",
+        "title": "A0001531859 Mercedes клапан турбонагнетателя original",
+        "price": 6705,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3868347221",
+        "title": "Клапан регулировки давления наддува Мерседес turbo",
+        "price": 5500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3873196213",
+        "title": "Клапан турбины соленоид Mercedes-Benz",
+        "price": 12500,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3623824283",
+        "title": "Турбина Mercedes-Benz E-class W212 274.920 2013",
+        "price": 30000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3529517270",
+        "title": "Клапан турбины Mercedes-Benz A0001531159",
+        "price": 7000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3621995274",
+        "title": "Клапан управления турбиной mercedes A0001531859",
+        "price": 2036,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3380817276",
+        "title": "Клапан турбонагнетателя (704818040)",
+        "price": 11550,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3603154169",
+        "title": "A0001531859 Клапан турбонагнетателя М270,274",
+        "price": 12000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3730061599",
+        "title": "Электромагнитный клапан турбины Mercedes",
+        "price": 3000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3504073811",
+        "title": "Клапан турбины Mercedes Pierburg 7.01870.06.0",
+        "price": 6400,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3190240485",
+        "title": "Mercedes w204 212 Клапан электромагнитный турбины",
+        "price": 4000,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3206721319",
+        "title": "Клапан управления турбиной (Актуатор) A0001531859 Mercedes-Benz A W176 0 Бензин",
+        "price": 11349,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3071170671",
+        "title": "Клапан турбины mercedes A0001531159 A0001531859",
+        "price": 16300,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "3018609825",
+        "title": "Клапан турбины Mercedes W212 W246 W242 W204",
+        "price": 3750,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "2528091417",
+        "title": "Турбина Mercedes C-class W205 M274 2.0TI 2016",
+        "price": 25300,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      },
+      {
+        "avito_item_id": "2038792112",
+        "title": "Клапан A0001531859 mercedes",
+        "price": 6360,
+        "images_urls_found": 0,
+        "images_downloaded_ok": 0,
+        "images_failed": 0,
+        "images_results": []
+      }
+    ],
+    "summary": {
+      "total_listings": 73,
+      "with_images_urls": 12,
+      "download_all_ok": 12,
+      "download_partial": 0,
+      "download_all_failed": 0,
+      "no_images_found": 61
+    }
+  }
+]
