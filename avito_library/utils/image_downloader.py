@@ -1,21 +1,18 @@
-"""Утилиты для скачивания изображений."""
+"""Утилиты для скачивания изображений через Playwright page.request."""
 
 from __future__ import annotations
 
 import asyncio
-import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-import httpx
-
-# Отключаем излишнее логирование HTTP-запросов от httpx
-logging.getLogger("httpx").setLevel(logging.WARNING)
+if TYPE_CHECKING:
+    from playwright.async_api import Page
 
 __all__ = [
     "ImageResult",
     "MAX_IMAGE_SIZE",
     "RETRY_DELAYS",
-    "CHUNK_SIZE",
     "RETRYABLE_STATUS_CODES",
     "validate_image",
     "detect_format",
@@ -25,7 +22,6 @@ __all__ = [
 # Константы
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB per file
 RETRY_DELAYS = (1.0, 2.0, 4.0)  # Exponential backoff
-CHUNK_SIZE = 8192
 RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
@@ -67,16 +63,21 @@ def validate_image(data: bytes) -> bool:
 
 async def download_images(
     urls: list[str],
+    page: Page,
+    *,
     max_concurrent: int = 10,
     timeout: float = 15.0,
 ) -> list[ImageResult]:
     """
-    Параллельно скачивает изображения.
+    Параллельно скачивает изображения через Playwright page.request.
+
+    Использует прокси и cookies из Browser Context, к которому принадлежит page.
 
     Args:
-        urls: Список URL изображений
-        max_concurrent: Максимум параллельных запросов
-        timeout: Таймаут на запрос
+        urls: Список URL изображений.
+        page: Playwright Page (наследует прокси от Browser Context).
+        max_concurrent: Максимум параллельных запросов.
+        timeout: Таймаут на запрос в секундах.
 
     Returns:
         Список ImageResult для каждого URL (порядок соответствует входным URL).
@@ -84,61 +85,57 @@ async def download_images(
     if not urls:
         return []
 
+    timeout_ms = timeout * 1000  # Playwright принимает миллисекунды
     semaphore = asyncio.Semaphore(max_concurrent)
 
-    async def fetch_one(
-        client: httpx.AsyncClient, url: str
-    ) -> ImageResult:
+    async def fetch_one(url: str) -> ImageResult:
         """Скачивает одно изображение с retry."""
         last_error = ""
 
         for attempt, delay in enumerate(RETRY_DELAYS, 1):
             try:
-                async with client.stream("GET", url) as response:
-                    if response.status_code != 200:
-                        last_error = f"HTTP {response.status_code}"
-                        if response.status_code not in RETRYABLE_STATUS_CODES:
-                            break  # Не retryable
-                        if attempt < len(RETRY_DELAYS):
-                            await asyncio.sleep(delay)
-                        continue
+                response = await page.request.get(url, timeout=timeout_ms)
 
-                    # Streaming с лимитом размера
-                    chunks: list[bytes] = []
-                    total = 0
-                    async for chunk in response.aiter_bytes(CHUNK_SIZE):
-                        total += len(chunk)
-                        if total > MAX_IMAGE_SIZE:
-                            return ImageResult(
-                                url=url,
-                                success=False,
-                                size=total,
-                                error=f"Size exceeded: {total}",
-                            )
-                        chunks.append(chunk)
+                if response.status != 200:
+                    last_error = f"HTTP {response.status}"
+                    await response.dispose()
+                    if response.status not in RETRYABLE_STATUS_CODES:
+                        break  # Не retryable
+                    if attempt < len(RETRY_DELAYS):
+                        await asyncio.sleep(delay)
+                    continue
 
-                    data = b"".join(chunks)
-                    fmt = detect_format(data)
+                data = await response.body()
+                await response.dispose()
 
-                    # Валидация magic bytes
-                    if fmt is None:
-                        return ImageResult(
-                            url=url,
-                            success=False,
-                            size=len(data),
-                            error="Invalid image format",
-                        )
-
+                # Проверка размера
+                if len(data) > MAX_IMAGE_SIZE:
                     return ImageResult(
                         url=url,
-                        success=True,
-                        data=data,
+                        success=False,
                         size=len(data),
-                        format=fmt,
+                        error=f"Size exceeded: {len(data)}",
                     )
 
-            except httpx.TimeoutException:
-                last_error = "Timeout"
+                fmt = detect_format(data)
+
+                # Валидация magic bytes
+                if fmt is None:
+                    return ImageResult(
+                        url=url,
+                        success=False,
+                        size=len(data),
+                        error="Invalid image format",
+                    )
+
+                return ImageResult(
+                    url=url,
+                    success=True,
+                    data=data,
+                    size=len(data),
+                    format=fmt,
+                )
+
             except Exception as e:
                 last_error = str(e)
 
@@ -151,15 +148,12 @@ async def download_images(
             error=last_error or "Unknown error",
         )
 
-    async def fetch_with_semaphore(
-        client: httpx.AsyncClient, url: str, index: int
-    ) -> tuple[int, ImageResult]:
+    async def fetch_with_semaphore(url: str, index: int) -> tuple[int, ImageResult]:
         async with semaphore:
-            return index, await fetch_one(client, url)
+            return index, await fetch_one(url)
 
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        tasks = [fetch_with_semaphore(client, url, i) for i, url in enumerate(urls)]
-        raw_results = await asyncio.gather(*tasks)
+    tasks = [fetch_with_semaphore(url, i) for i, url in enumerate(urls)]
+    raw_results = await asyncio.gather(*tasks)
 
     # Сортируем по индексу — порядок результатов соответствует входным URL
     return [result for _, result in sorted(raw_results)]

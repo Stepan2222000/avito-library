@@ -254,7 +254,7 @@ async def extract_listing(
         urls = await _extract_images_from_catalog_card(card)
         images_urls = urls
         if urls:
-            images_results = await download_images(urls)
+            images_results = await download_images(urls, card.page)
             images = [r.data for r in images_results if r.success and r.data]
             images_errors = [f"{r.url}: {r.error}" for r in images_results if not r.success]
         else:

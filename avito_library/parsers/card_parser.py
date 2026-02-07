@@ -106,6 +106,7 @@ _SUPPORTED_FIELDS = {
 async def _parse_card_html(
     html: str,
     *,
+    page: Page,
     fields: Iterable[str],
     include_html: bool = False,
 ) -> CardData:
@@ -153,7 +154,7 @@ async def _parse_card_html(
         urls = _extract_images(soup, html)
         data.images_urls = urls
         if urls:
-            data.images_results = await _download_images(urls)
+            data.images_results = await _download_images(urls, page)
             data.images = [r.data for r in data.images_results if r.success and r.data]
             data.images_errors = [f"{r.url}: {r.error}" for r in data.images_results if not r.success]
         else:
@@ -242,7 +243,7 @@ async def parse_card(
     # 4. Обработка финального состояния
     if state == CARD_FOUND_DETECTOR_ID:
         html = await page.content()
-        data = await _parse_card_html(html, fields=fields, include_html=include_html)
+        data = await _parse_card_html(html, page=page, fields=fields, include_html=include_html)
         return CardParseResult(status=CardParseStatus.SUCCESS, data=data)
 
     if state in (PROXY_BLOCK_403_DETECTOR_ID, PROXY_AUTH_DETECTOR_ID):
