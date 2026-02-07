@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Optional
 
 import httpx
+
+# Отключаем излишнее логирование HTTP-запросов от httpx
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 __all__ = [
     "MAX_IMAGE_SIZE",

@@ -366,31 +366,28 @@ async def _fill_seller_type(page: Page, seller_type: str) -> None:
 
 
 async def _click_show_button(page: Page) -> None:
-    """Находит и кликает кнопку 'Показать N объявлений'."""
+    """Находит и кликает кнопку 'Показать N объявлений'.
+
+    Если кнопка не появляется (например, после radio-tab фильтра,
+    который автоматически перезагружает страницу), просто продолжает работу.
+    """
     await page.wait_for_timeout(SHOW_BUTTON_WAIT_MS)
 
-    buttons = page.locator("button")
-    count = await buttons.count()
+    btn = page.locator('[data-marker="search-filters/submit-button"]')
 
-    for i in range(count):
-        btn = buttons.nth(i)
-        try:
-            text = await btn.text_content(timeout=500)
-            if not text:
-                continue
+    if not await btn.count():
+        logger.info("Кнопка 'Показать' не найдена — фильтры уже применены через навигацию")
+        return
 
-            # Ищем "Показать" + число + "объявлен", но НЕ "телефон"
-            if "Показать" in text and "телефон" not in text.lower():
-                if re.search(r"\d+.*объявлен", text):
-                    await btn.scroll_into_view_if_needed()
+    try:
+        await btn.wait_for(state="visible", timeout=2000)
+    except Exception:
+        logger.info("Кнопка 'Показать' не стала видимой — фильтры уже применены через навигацию")
+        return
 
-                    await btn.click()
-                    await page.wait_for_timeout(2000)
+    await btn.scroll_into_view_if_needed()
+    await btn.click()
+    await page.wait_for_timeout(2000)
 
-                    logger.info("Кликнули кнопку: %s", text.strip()[:50])
-                    return
-        except Exception:
-            continue
-
-    logger.error("Кнопка 'Показать N объявлений' не найдена на странице")
-    raise ValueError("Кнопка 'Показать N объявлений' не найдена на странице")
+    text = await btn.text_content(timeout=1000) or ""
+    logger.info("Кликнули кнопку: %s", text.strip()[:50])
