@@ -389,5 +389,8 @@ async def _click_show_button(page: Page) -> None:
     await btn.click()
     await page.wait_for_timeout(2000)
 
-    text = await btn.text_content(timeout=1000) or ""
-    logger.info("Кликнули кнопку: %s", text.strip()[:50])
+    try:
+        text = await btn.text_content(timeout=1000) or ""
+        logger.info("Кликнули кнопку: %s", text.strip()[:50])
+    except Exception:
+        logger.info("Кликнули кнопку 'Показать' (текст недоступен после навигации)")
