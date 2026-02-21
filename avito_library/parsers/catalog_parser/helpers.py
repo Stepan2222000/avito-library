@@ -18,8 +18,10 @@ NEXT_PAGE_SELECTOR = 'a[data-marker="pagination-button/nextPage"]'
 SCROLL_ATTEMPTS = 1
 SCROLL_DELAY_MS = 200
 SCROLL_SETTLE_MS = 400
-_GRADUAL_SCROLL_STEP_MS = 1200
-_GRADUAL_SCROLL_SETTLE_MS = 2000
+_GRADUAL_SCROLL_STEP_MS = 400
+_GRADUAL_SCROLL_SETTLE_MS = 600
+_SRCSET_POLL_INTERVAL_MS = 200
+_DEFAULT_MAX_SRCSET_WAIT_MS = 3000
 PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
 SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
@@ -78,44 +80,65 @@ def apply_start_page(url: str, start_page: int) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
+_JS_COLLECT_SRCSET = """() => {
+    const result = {};
+    const cards = document.querySelectorAll('[data-item-id]');
+    for (const card of cards) {
+        const imgs = card.querySelectorAll('img[srcset]');
+        if (!imgs.length) continue;
+        const itemId = card.dataset.itemId;
+        if (!itemId || result[itemId]) continue;
+        const urls = [];
+        for (const img of imgs) {
+            const srcset = img.getAttribute('srcset');
+            if (!srcset) continue;
+            let bestUrl = null, bestSize = 0;
+            for (const part of srcset.split(',')) {
+                const t = part.trim();
+                const sp = t.lastIndexOf(' ');
+                if (sp === -1) continue;
+                const size = parseInt(t.slice(sp + 1), 10);
+                if (!isNaN(size) && size > bestSize) {
+                    bestSize = size;
+                    bestUrl = t.slice(0, sp);
+                }
+            }
+            if (bestUrl) urls.push(bestUrl);
+        }
+        if (urls.length) result[itemId] = urls;
+    }
+    return result;
+}"""
+
+_JS_COUNT_VISIBLE_CARDS = """(scrollY, viewportH) => {
+    let total = 0;
+    let withSrcset = 0;
+    const cards = document.querySelectorAll('[data-item-id]');
+    for (const card of cards) {
+        const rect = card.getBoundingClientRect();
+        const absTop = rect.top + scrollY;
+        const absBottom = absTop + rect.height;
+        if (absBottom < scrollY || absTop > scrollY + viewportH) continue;
+        total++;
+        if (card.querySelector('img[srcset]')) withSrcset++;
+    }
+    return {total, withSrcset};
+}"""
+
+
 async def _collect_srcset_at_position(page: Page) -> dict[str, list[str]]:
     """Собирает лучшие URL из srcset для всех карточек, у которых React
     отрендерил img[srcset] (т.е. карточка сейчас находится в viewport).
 
     Выполняется одним JS-вызовом — минимальный overhead на каждой позиции скролла.
     """
-    return await page.evaluate("""() => {
-        const result = {};
-        const cards = document.querySelectorAll('[data-item-id]');
-        for (const card of cards) {
-            const imgs = card.querySelectorAll('img[srcset]');
-            if (!imgs.length) continue;
-            const itemId = card.dataset.itemId;
-            if (!itemId || result[itemId]) continue;
-            const urls = [];
-            for (const img of imgs) {
-                const srcset = img.getAttribute('srcset');
-                if (!srcset) continue;
-                let bestUrl = null, bestSize = 0;
-                for (const part of srcset.split(',')) {
-                    const t = part.trim();
-                    const sp = t.lastIndexOf(' ');
-                    if (sp === -1) continue;
-                    const size = parseInt(t.slice(sp + 1), 10);
-                    if (!isNaN(size) && size > bestSize) {
-                        bestSize = size;
-                        bestUrl = t.slice(0, sp);
-                    }
-                }
-                if (bestUrl) urls.push(bestUrl);
-            }
-            if (urls.length) result[itemId] = urls;
-        }
-        return result;
-    }""")
+    return await page.evaluate(_JS_COLLECT_SRCSET)
 
 
-async def _gradual_scroll(page: Page) -> dict[str, list[str]]:
+async def _gradual_scroll(
+    page: Page,
+    max_srcset_wait_ms: int = _DEFAULT_MAX_SRCSET_WAIT_MS,
+) -> dict[str, list[str]]:
     """Постепенный скролл по странице для загрузки ленивых элементов.
 
     Avito рендерит слайдер изображений карточек только когда карточка
@@ -123,8 +146,15 @@ async def _gradual_scroll(page: Page) -> dict[str, list[str]]:
     прокручивает страницу с шагом в пол-viewport и на каждой позиции
     собирает img[srcset] URL через JS, пока карточки видимы.
 
-    После возврата наверх React может размонтировать нижние карточки,
-    поэтому URL собираются во время скролла, а не после.
+    Если max_srcset_wait_ms > 0, на каждой позиции скролла проверяется,
+    все ли видимые карточки отрендерили img[srcset]. Если нет — ожидание
+    продолжается с интервалом _SRCSET_POLL_INTERVAL_MS до тех пор, пока
+    все карточки не будут готовы или не истечёт max_srcset_wait_ms.
+
+    Args:
+        page: Playwright Page.
+        max_srcset_wait_ms: Максимальное время ожидания srcset на каждой
+            позиции скролла (мс). 0 = отключить адаптивное ожидание.
 
     Returns:
         dict item_id → list[str] с лучшими URL (636w) для каждой карточки.
@@ -139,14 +169,23 @@ async def _gradual_scroll(page: Page) -> dict[str, list[str]]:
         await page.evaluate(f"window.scrollTo(0, {position})")
         await page.wait_for_timeout(_GRADUAL_SCROLL_STEP_MS)
 
-        # Собираем srcset для всех карточек с отрендеренными изображениями
+        if max_srcset_wait_ms > 0:
+            waited = 0
+            while waited < max_srcset_wait_ms:
+                counts = await page.evaluate(
+                    _JS_COUNT_VISIBLE_CARDS, position, viewport_height,
+                )
+                if counts["total"] > 0 and counts["withSrcset"] >= counts["total"]:
+                    break
+                await page.wait_for_timeout(_SRCSET_POLL_INTERVAL_MS)
+                waited += _SRCSET_POLL_INTERVAL_MS
+
         batch = await _collect_srcset_at_position(page)
         for item_id, urls in batch.items():
             if item_id not in prefetched:
                 prefetched[item_id] = urls
 
         position += step
-        # Высота может измениться при динамической подгрузке
         new_height: int = await page.evaluate("document.body.scrollHeight")
         if new_height > scroll_height:
             scroll_height = new_height
@@ -162,6 +201,7 @@ async def load_catalog_cards(
     page: Page,
     *,
     preload_images: bool = False,
+    max_srcset_wait_ms: int = _DEFAULT_MAX_SRCSET_WAIT_MS,
 ) -> tuple[list[Locator], dict[str, list[str]]]:
     """Скроллит страницу и возвращает список локаторов карточек.
 
@@ -170,6 +210,11 @@ async def load_catalog_cards(
         preload_images: Если True, используется градиентный скролл,
             который загружает ленивые изображения карточек (React рендерит
             слайдер только при попадании карточки в viewport).
+        max_srcset_wait_ms: Максимальное время ожидания srcset на каждой
+            позиции скролла (мс). На каждой позиции проверяется, все ли
+            видимые карточки отрендерили img[srcset]. Если нет — ожидание
+            продолжается с коротким интервалом. 0 = не ждать, использовать
+            фиксированную задержку. По умолчанию 3000.
 
     Returns:
         Кортеж (карточки, prefetched_images) где prefetched_images —
@@ -180,7 +225,7 @@ async def load_catalog_cards(
     prefetched: dict[str, list[str]] = {}
 
     if preload_images:
-        prefetched = await _gradual_scroll(page)
+        prefetched = await _gradual_scroll(page, max_srcset_wait_ms=max_srcset_wait_ms)
     else:
         previous_count = -1
         attempts = 0

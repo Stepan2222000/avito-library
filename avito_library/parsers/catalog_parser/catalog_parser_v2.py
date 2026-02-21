@@ -89,6 +89,7 @@ async def parse_single_page(
     fields: Iterable[str],
     include_html: bool = False,
     max_captcha_attempts: int = 30,
+    max_srcset_wait_ms: int = 3000,
 ) -> SinglePageResult:
     """Парсит одну страницу каталога (страница уже открыта).
 
@@ -183,7 +184,9 @@ async def parse_single_page(
     # 6. Успех — парсим каталог
     if state == CATALOG_DETECTOR_ID:
         card_locators, prefetched_images = await load_catalog_cards(
-            page, preload_images="images" in fields_set,
+            page,
+            preload_images="images" in fields_set,
+            max_srcset_wait_ms=max_srcset_wait_ms,
         )
         cards: list[CatalogListing] = []
 
@@ -260,6 +263,7 @@ async def parse_catalog(
     max_captcha_attempts: int = 30,
     load_timeout: int = 180_000,
     load_retries: int = 5,
+    max_srcset_wait_ms: int = 3000,
     _skip_navigation: bool = False,
 ) -> CatalogParseResult:
     """Парсит каталог Avito с автоматическим применением фильтров.
@@ -843,6 +847,8 @@ async def _continue_parsing(
         max_captcha_attempts=prev_result._max_captcha_attempts,
         load_timeout=prev_result._load_timeout,
         load_retries=prev_result._load_retries,
+        max_srcset_wait_ms=prev_result._max_srcset_wait_ms
+            if hasattr(prev_result, "_max_srcset_wait_ms") else 3000,
         _skip_navigation=True,
     )
 
