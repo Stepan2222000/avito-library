@@ -78,22 +78,73 @@ def apply_start_page(url: str, start_page: int) -> str:
     return urlunparse(parsed._replace(query=new_query))
 
 
-async def _gradual_scroll(page: Page) -> None:
+async def _collect_srcset_at_position(page: Page) -> dict[str, list[str]]:
+    """Собирает лучшие URL из srcset для всех карточек, у которых React
+    отрендерил img[srcset] (т.е. карточка сейчас находится в viewport).
+
+    Выполняется одним JS-вызовом — минимальный overhead на каждой позиции скролла.
+    """
+    return await page.evaluate("""() => {
+        const result = {};
+        const cards = document.querySelectorAll('[data-item-id]');
+        for (const card of cards) {
+            const imgs = card.querySelectorAll('img[srcset]');
+            if (!imgs.length) continue;
+            const itemId = card.dataset.itemId;
+            if (!itemId || result[itemId]) continue;
+            const urls = [];
+            for (const img of imgs) {
+                const srcset = img.getAttribute('srcset');
+                if (!srcset) continue;
+                let bestUrl = null, bestSize = 0;
+                for (const part of srcset.split(',')) {
+                    const t = part.trim();
+                    const sp = t.lastIndexOf(' ');
+                    if (sp === -1) continue;
+                    const size = parseInt(t.slice(sp + 1), 10);
+                    if (!isNaN(size) && size > bestSize) {
+                        bestSize = size;
+                        bestUrl = t.slice(0, sp);
+                    }
+                }
+                if (bestUrl) urls.push(bestUrl);
+            }
+            if (urls.length) result[itemId] = urls;
+        }
+        return result;
+    }""")
+
+
+async def _gradual_scroll(page: Page) -> dict[str, list[str]]:
     """Постепенный скролл по странице для загрузки ленивых элементов.
 
     Avito рендерит слайдер изображений карточек только когда карточка
     попадает в viewport (ленивый рендеринг React-компонента). Этот метод
-    прокручивает страницу с шагом в пол-viewport, чтобы каждая карточка
-    гарантированно побывала видимой и её img[srcset] отрендерились.
+    прокручивает страницу с шагом в пол-viewport и на каждой позиции
+    собирает img[srcset] URL через JS, пока карточки видимы.
+
+    После возврата наверх React может размонтировать нижние карточки,
+    поэтому URL собираются во время скролла, а не после.
+
+    Returns:
+        dict item_id → list[str] с лучшими URL (636w) для каждой карточки.
     """
     scroll_height: int = await page.evaluate("document.body.scrollHeight")
     viewport_height: int = await page.evaluate("window.innerHeight")
     step = max(viewport_height // 2, 300)
 
+    prefetched: dict[str, list[str]] = {}
     position = 0
     while position < scroll_height:
         await page.evaluate(f"window.scrollTo(0, {position})")
         await page.wait_for_timeout(_GRADUAL_SCROLL_STEP_MS)
+
+        # Собираем srcset для всех карточек с отрендеренными изображениями
+        batch = await _collect_srcset_at_position(page)
+        for item_id, urls in batch.items():
+            if item_id not in prefetched:
+                prefetched[item_id] = urls
+
         position += step
         # Высота может измениться при динамической подгрузке
         new_height: int = await page.evaluate("document.body.scrollHeight")
@@ -104,12 +155,14 @@ async def _gradual_scroll(page: Page) -> None:
     await page.evaluate("window.scrollTo(0, 0)")
     await page.wait_for_timeout(_GRADUAL_SCROLL_SETTLE_MS)
 
+    return prefetched
+
 
 async def load_catalog_cards(
     page: Page,
     *,
     preload_images: bool = False,
-) -> list[Locator]:
+) -> tuple[list[Locator], dict[str, list[str]]]:
     """Скроллит страницу и возвращает список локаторов карточек.
 
     Args:
@@ -117,11 +170,17 @@ async def load_catalog_cards(
         preload_images: Если True, используется градиентный скролл,
             который загружает ленивые изображения карточек (React рендерит
             слайдер только при попадании карточки в viewport).
+
+    Returns:
+        Кортеж (карточки, prefetched_images) где prefetched_images —
+        dict item_id → [url, ...] с URL 636w, собранными во время скролла.
+        При preload_images=False prefetched_images пустой.
     """
     catalog_locator = page.locator(CATALOG_CARD_SELECTOR)
+    prefetched: dict[str, list[str]] = {}
 
     if preload_images:
-        await _gradual_scroll(page)
+        prefetched = await _gradual_scroll(page)
     else:
         previous_count = -1
         attempts = 0
@@ -149,7 +208,7 @@ async def load_catalog_cards(
             continue
         filtered.append(card)
 
-    return filtered
+    return filtered, prefetched
 
 
 async def get_next_page_url(page: Page, current_url: str) -> Tuple[bool, str | None]:
@@ -182,25 +241,35 @@ def has_empty_markers(html: str) -> bool:
 _SLIDER_IMAGE_MARKER_PREFIX = "slider-image/image-"
 
 
-async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
+async def _extract_images_from_catalog_card(
+    card: Locator,
+    prefetched_images: dict[str, list[str]] | None = None,
+) -> list[str]:
     """Извлекает URL изображений из карточки каталога.
 
-    Основной путь: парсит атрибут srcset каждого <img> внутри карточки
-    и выбирает URL с максимальным разрешением (обычно 636w).
+    Приоритет 1: prefetched_images — URL собранные через JS во время скролла,
+    когда карточка была в viewport и React отрендерил img[srcset] (636w).
 
-    Fallback: если img[srcset] не найдены (карточка не была в viewport
-    и React не отрендерил слайдер), извлекает URL из атрибута data-marker
-    элементов <li> слайдера (формат: "slider-image/image-{URL}").
-    Fallback даёт 208w качество.
+    Приоритет 2: img[srcset] в текущем DOM (может отсутствовать если React
+    размонтировал компонент после возврата скролла наверх).
+
+    Fallback: data-marker атрибуты li-элементов слайдера (всегда 208w).
 
     Args:
-        card: Локатор карточки товара
+        card: Локатор карточки товара.
+        prefetched_images: dict item_id → [url] собранный во время скролла.
 
     Returns:
-        Список URL изображений
+        Список URL изображений.
     """
-    urls: list[str] = []
+    # Приоритет 1: prefetched URL (636w, собраны во время скролла)
+    if prefetched_images is not None:
+        item_id = await card.get_attribute("data-item-id")
+        if item_id and item_id in prefetched_images:
+            return prefetched_images[item_id]
 
+    # Приоритет 2: img[srcset] в текущем DOM
+    urls: list[str] = []
     imgs = await card.locator("img[srcset]").all()
 
     for img in imgs:
@@ -234,17 +303,19 @@ async def _extract_images_from_catalog_card(card: Locator) -> list[str]:
         if best_url:
             urls.append(best_url)
 
-    # Fallback: извлекаем URL из data-marker если srcset не отрендерился
-    if not urls:
-        lis = await card.locator(
-            f'li[data-marker^="{_SLIDER_IMAGE_MARKER_PREFIX}"]'
-        ).all()
-        for li in lis:
-            marker = await li.get_attribute("data-marker")
-            if marker and marker.startswith(_SLIDER_IMAGE_MARKER_PREFIX):
-                url = marker[len(_SLIDER_IMAGE_MARKER_PREFIX) :]
-                if url:
-                    urls.append(url)
+    if urls:
+        return urls
+
+    # Fallback: извлекаем URL из data-marker если srcset не отрендерился (208w)
+    lis = await card.locator(
+        f'li[data-marker^="{_SLIDER_IMAGE_MARKER_PREFIX}"]'
+    ).all()
+    for li in lis:
+        marker = await li.get_attribute("data-marker")
+        if marker and marker.startswith(_SLIDER_IMAGE_MARKER_PREFIX):
+            url = marker[len(_SLIDER_IMAGE_MARKER_PREFIX) :]
+            if url:
+                urls.append(url)
 
     return urls
 
@@ -254,6 +325,7 @@ async def extract_listing(
     fields: set[str],
     *,
     include_html: bool,
+    prefetched_images: dict[str, list[str]] | None = None,
 ) -> CatalogListing:
     """Извлекает данные из карточки согласно запрошенным полям."""
 
@@ -313,7 +385,7 @@ async def extract_listing(
 
     # Извлечение и скачивание изображений
     if "images" in fields:
-        urls = await _extract_images_from_catalog_card(card)
+        urls = await _extract_images_from_catalog_card(card, prefetched_images)
         images_urls = urls
         if urls:
             images_results = await download_images(urls, card.page)

@@ -182,7 +182,7 @@ async def parse_single_page(
 
     # 6. Успех — парсим каталог
     if state == CATALOG_DETECTOR_ID:
-        card_locators = await load_catalog_cards(
+        card_locators, prefetched_images = await load_catalog_cards(
             page, preload_images="images" in fields_set,
         )
         cards: list[CatalogListing] = []
@@ -192,6 +192,7 @@ async def parse_single_page(
                 locator,
                 fields_set,
                 include_html=include_html,
+                prefetched_images=prefetched_images,
             )
             if listing.item_id:
                 cards.append(listing)
