@@ -18,8 +18,8 @@ NEXT_PAGE_SELECTOR = 'a[data-marker="pagination-button/nextPage"]'
 SCROLL_ATTEMPTS = 1
 SCROLL_DELAY_MS = 200
 SCROLL_SETTLE_MS = 400
-_GRADUAL_SCROLL_STEP_MS = 600
-_GRADUAL_SCROLL_SETTLE_MS = 1000
+_GRADUAL_SCROLL_STEP_MS = 1200
+_GRADUAL_SCROLL_SETTLE_MS = 2000
 PROMOTED_BADGE_SELECTOR = '[data-marker^="badge-title"]'
 SNIPPET_SELECTOR = 'div.iva-item-bottomBlock-VewGa p.styles-module-size_m-w6vzl'
 SELLER_CONTAINER_SELECTOR = "div.iva-item-sellerInfo-w2qER"
