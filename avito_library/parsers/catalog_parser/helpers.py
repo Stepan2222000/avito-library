@@ -110,7 +110,8 @@ _JS_COLLECT_SRCSET = """() => {
     return result;
 }"""
 
-_JS_COUNT_VISIBLE_CARDS = """(scrollY, viewportH) => {
+_JS_COUNT_VISIBLE_CARDS = """(args) => {
+    const scrollY = args[0], viewportH = args[1];
     let total = 0;
     let withSrcset = 0;
     const cards = document.querySelectorAll('[data-item-id]');
@@ -173,7 +174,7 @@ async def _gradual_scroll(
             waited = 0
             while waited < max_srcset_wait_ms:
                 counts = await page.evaluate(
-                    _JS_COUNT_VISIBLE_CARDS, position, viewport_height,
+                    _JS_COUNT_VISIBLE_CARDS, [position, viewport_height],
                 )
                 if counts["total"] > 0 and counts["withSrcset"] >= counts["total"]:
                     break
