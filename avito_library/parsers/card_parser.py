@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import re
-import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable, Optional
@@ -32,17 +31,6 @@ from avito_library.capcha import resolve_captcha_flow
 from avito_library.utils.image_downloader import ImageResult, download_images as _download_images
 
 logger = logging.getLogger(__name__)
-
-_DEBUG_LOG_PATH = "/Users/stepanorlov/Desktop/DONE/avito-library/.cursor/debug.log"
-_DEBUG_RUN_ID = "pre-fix"
-
-
-def _debug_log(payload: dict) -> None:
-    try:
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
-    except Exception:
-        pass
 
 __all__ = ["CardData", "CardParsingError", "parse_card", "CardParseStatus", "CardParseResult"]
 
@@ -151,7 +139,7 @@ async def _parse_card_html(
         data.views_total = _extract_views(soup)
 
     if "images" in requested_fields:
-        urls = _extract_images(soup, html)
+        urls = await _extract_images(soup, html, page)
         data.images_urls = urls
         if urls:
             data.images_results = await _download_images(urls, page)
@@ -407,17 +395,115 @@ def _extract_views(soup: BeautifulSoup) -> Optional[int]:
 
 # Альтернативные пути к imageUrls (защита от изменений структуры Avito)
 _IMAGE_PATHS: list[list[str]] = [
+    # Новый формат (React Router, февраль 2026+)
+    ["loaderData", "catalog-or-main-or-item", "buyerItem", "item", "imageUrls"],
+    # Старый формат (__preloadedState__)
     ["@avito/bx-item-view", "buyerItem", "item", "imageUrls"],
     ["@avito/bx-item-view-v2", "buyerItem", "item", "imageUrls"],
     ["buyerItem", "item", "imageUrls"],
     ["item", "imageUrls"],
 ]
 
-# Приоритет размеров (от лучшего к худшему)
-_SIZE_PRIORITY: list[str] = ["1280x960", "640x480", "150x110", "75x55"]
+# Приоритет размеров — ТОЛЬКО высокое разрешение
+_SIZE_PRIORITY: list[str] = ["1280x960", "640x480"]
 
 # Максимальная глубина рекурсивного поиска
 _MAX_RECURSION_DEPTH: int = 6
+
+# JS-код для page.evaluate() — читает из обоих источников данных Avito
+_JS_EXTRACT_IMAGE_URLS: str = """
+(() => {
+    const sizes = ['1280x960', '640x480'];
+
+    const paths = [
+        ['loaderData', 'catalog-or-main-or-item', 'buyerItem', 'item', 'imageUrls'],
+        ['@avito/bx-item-view', 'buyerItem', 'item', 'imageUrls'],
+        ['@avito/bx-item-view-v2', 'buyerItem', 'item', 'imageUrls'],
+        ['buyerItem', 'item', 'imageUrls'],
+        ['item', 'imageUrls'],
+    ];
+
+    function extractFrom(state) {
+        if (!state || typeof state !== 'object') return null;
+        for (const path of paths) {
+            let cur = state;
+            for (const k of path) {
+                if (!cur || typeof cur !== 'object') { cur = null; break; }
+                cur = cur[k];
+            }
+            if (Array.isArray(cur) && cur.length > 0) {
+                const urls = cur.map(img => {
+                    if (typeof img !== 'object' || img === null) return null;
+                    for (const s of sizes) { if (img[s]) return img[s]; }
+                    return null;
+                }).filter(Boolean);
+                if (urls.length > 0) return urls;
+            }
+        }
+        function find(obj, depth) {
+            if (depth > 6 || !obj || typeof obj !== 'object') return null;
+            if (Array.isArray(obj)) {
+                for (const item of obj) { const r = find(item, depth+1); if (r) return r; }
+                return null;
+            }
+            if ('imageUrls' in obj && Array.isArray(obj.imageUrls) && obj.imageUrls.length > 0) {
+                const urls = obj.imageUrls.map(img => {
+                    if (typeof img !== 'object' || img === null) return null;
+                    for (const s of sizes) { if (img[s]) return img[s]; }
+                    return null;
+                }).filter(Boolean);
+                if (urls.length > 0) return urls;
+            }
+            for (const v of Object.values(obj)) { const r = find(v, depth+1); if (r) return r; }
+            return null;
+        }
+        return find(state, 0);
+    }
+
+    // 1. Новый формат: __staticRouterHydrationData (2026+)
+    if (window.__staticRouterHydrationData) {
+        const r = extractFrom(window.__staticRouterHydrationData);
+        if (r) return r;
+    }
+
+    // 2. Старый формат: __preloadedState__
+    let ps = window.__preloadedState__;
+    if (ps !== undefined && ps !== null) {
+        if (typeof ps === 'string') {
+            try { ps = JSON.parse(decodeURIComponent(ps)); } catch(e) {
+                try { ps = JSON.parse(ps); } catch(e2) { ps = null; }
+            }
+        }
+        if (ps) { const r = extractFrom(ps); if (r) return r; }
+    }
+
+    return null;
+})()
+"""
+
+
+async def _extract_images_via_js(page: Page) -> list[str]:
+    """Извлекает URL изображений через page.evaluate() (CSR fallback)."""
+    try:
+        result = await page.evaluate(_JS_EXTRACT_IMAGE_URLS)
+    except Exception as exc:
+        logger.debug(f"page.evaluate() failed: {exc}")
+        return []
+
+    if not result or not isinstance(result, list):
+        return []
+
+    seen: set[str] = set()
+    urls: list[str] = []
+    for url in result:
+        if isinstance(url, str) and url not in seen:
+            urls.append(url)
+            seen.add(url)
+
+    if urls:
+        logger.debug(f"JS extraction: {len(urls)} HQ image URLs via page.evaluate()")
+
+    return urls
 
 
 def _safe_get(data: dict, path: list[str]) -> Any:
@@ -447,7 +533,6 @@ def _recursive_find_key(data: Any, target_key: str, depth: int = 0) -> Optional[
             if result is not None:
                 return result
 
-    # Обходим массивы тоже (исправление из review)
     elif isinstance(data, list):
         for item in data:
             result = _recursive_find_key(item, target_key, depth + 1)
@@ -457,20 +542,38 @@ def _recursive_find_key(data: Any, target_key: str, depth: int = 0) -> Optional[
     return None
 
 
-def _parse_preloaded_state(html_text: str) -> Optional[dict]:
-    """Извлекает и парсит __preloadedState__ из HTML."""
+def _parse_json_states(html_text: str) -> list[dict]:
+    """Извлекает ВСЕ JSON-состояния из HTML.
 
-    # Паттерны для разных форматов
-    # 1. URL-encoded string (основной формат): __preloadedState__ = "..."
-    # 2. Raw JSON (запасной): __preloadedState__ = {...}
+    Возвращает список распарсенных dict (от приоритетного к запасному):
+    1. __staticRouterHydrationData = JSON.parse("...") — новый (2026+)
+    2. __preloadedState__ = "..." — старый (URL-encoded)
+    3. __preloadedState__ = {...} — старый (raw JSON)
+
+    Caller сам решает, какое состояние содержит нужные данные.
+    """
+
     patterns = [
-        # URL-encoded - поддержка escaped quotes (исправление из review)
-        r'__preloadedState__\s*=\s*"((?:[^"\\]|\\.)*)"',
-        # Raw JSON (упрощенный)
-        r'__preloadedState__\s*=\s*(\{[^<]*)',
+        # Новый формат: __staticRouterHydrationData = JSON.parse("escaped JSON")
+        (
+            r'__staticRouterHydrationData\s*=\s*JSON\.parse\(\s*"((?:[^"\\]|\\.)*)"\s*\)',
+            "hydration_escaped",
+        ),
+        # Старый формат: URL-encoded string
+        (
+            r'__preloadedState__\s*=\s*"((?:[^"\\]|\\.)*)"',
+            "preloaded_urlencoded",
+        ),
+        # Старый формат: Raw JSON
+        (
+            r'__preloadedState__\s*=\s*(\{[^<]*)',
+            "preloaded_raw",
+        ),
     ]
 
-    for i, pattern in enumerate(patterns):
+    results: list[dict] = []
+
+    for pattern, format_type in patterns:
         match = re.search(pattern, html_text, re.DOTALL)
         if not match:
             continue
@@ -478,78 +581,41 @@ def _parse_preloaded_state(html_text: str) -> Optional[dict]:
         raw = match.group(1)
 
         try:
-            # URL-encoded JSON (начинается с %7B)
-            if raw.startswith("%7B") or raw.startswith("%7b"):
-                json_str = unquote(raw)
-            elif raw.startswith("{"):
-                # Raw JSON - пытаемся сбалансировать скобки (исправление из review)
+            if format_type == "hydration_escaped":
+                # raw содержит escaped JSON: {\"key\":\"val\"}
+                # Сначала unescape (как JS string literal), потом parse
+                unescaped = json.loads('"' + raw + '"')
+                parsed = json.loads(unescaped)
+                logger.debug(f"Parsed {format_type}: {len(raw)} chars")
+                results.append(parsed)
+
+            elif format_type == "preloaded_urlencoded":
+                if raw.startswith("%7B") or raw.startswith("%7b"):
+                    json_str = unquote(raw)
+                else:
+                    continue
+                parsed = json.loads(json_str)
+                logger.debug(f"Parsed {format_type}: {len(raw)} chars")
+                results.append(parsed)
+
+            elif format_type == "preloaded_raw":
+                if not raw.startswith("{"):
+                    continue
                 json_str = _extract_balanced_json(raw)
                 if not json_str:
                     continue
-            else:
-                continue
-
-            parsed = json.loads(json_str)
-            # region agent log
-            _debug_log(
-                {
-                    "sessionId": "debug-session",
-                    "runId": _DEBUG_RUN_ID,
-                    "hypothesisId": "H1",
-                    "location": "card_parser.py:_parse_preloaded_state",
-                    "message": "preloaded_state_parsed",
-                    "data": {
-                        "pattern_index": i,
-                        "raw_len": len(raw),
-                        "json_len": len(json_str),
-                        "root_type": type(parsed).__name__,
-                        "root_keys_sample": list(parsed.keys())[:6] if isinstance(parsed, dict) else None,
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            # endregion agent log
-            return parsed
+                parsed = json.loads(json_str)
+                logger.debug(f"Parsed {format_type}: {len(raw)} chars")
+                results.append(parsed)
 
         except json.JSONDecodeError as e:
-            logger.debug(f"JSON parse failed (pattern {i}): {e}")
-            # region agent log
-            _debug_log(
-                {
-                    "sessionId": "debug-session",
-                    "runId": _DEBUG_RUN_ID,
-                    "hypothesisId": "H1",
-                    "location": "card_parser.py:_parse_preloaded_state",
-                    "message": "preloaded_state_json_decode_error",
-                    "data": {
-                        "pattern_index": i,
-                        "raw_prefix": raw[:12],
-                        "raw_len": len(raw),
-                        "error": str(e)[:120],
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            # endregion agent log
+            logger.debug(f"JSON parse failed ({format_type}): {e}")
             continue
 
-    # region agent log
-    _debug_log(
-        {
-            "sessionId": "debug-session",
-            "runId": _DEBUG_RUN_ID,
-            "hypothesisId": "H1",
-            "location": "card_parser.py:_parse_preloaded_state",
-            "message": "preloaded_state_not_found",
-            "data": {
-                "contains_marker": "__preloadedState__" in html_text,
-                "html_len": len(html_text),
-            },
-            "timestamp": int(time.time() * 1000),
-        }
-    )
-    # endregion agent log
-    return None
+    if not results:
+        logger.debug("No JSON state found in HTML")
+
+    return results
 
 
 def _extract_balanced_json(raw: str) -> Optional[str]:
@@ -595,13 +661,12 @@ def _extract_balanced_json(raw: str) -> Optional[str]:
 def _extract_urls_from_image_data(image_urls: list) -> list[str]:
     """Извлекает URL лучшего качества из массива imageUrls."""
     result: list[str] = []
-    seen: set[str] = set()  # Удаление дубликатов (исправление из review)
+    seen: set[str] = set()
 
     for img_data in image_urls:
         if not isinstance(img_data, dict):
             continue
 
-        # Берём лучшее доступное качество
         url: Optional[str] = None
         for size in _SIZE_PRIORITY:
             url = img_data.get(size)
@@ -615,118 +680,27 @@ def _extract_urls_from_image_data(image_urls: list) -> list[str]:
     return result
 
 
-def _extract_images_from_html_gallery(soup: BeautifulSoup) -> list[str]:
-    """Fallback: извлечение из HTML галереи (миниатюры)."""
-    images: list[str] = []
-    seen: set[str] = set()
-    preview_attr_counts = {
-        "src": 0,
-        "data_src": 0,
-        "data_srcset": 0,
-        "srcset": 0,
-        "data_url": 0,
-    }
-    gallery_attr_counts = {
-        "src": 0,
-        "data_src": 0,
-        "data_srcset": 0,
-        "srcset": 0,
-        "data_url": 0,
-    }
-    preview_items = soup.select('li[data-marker="image-preview/item"]')
-    gallery_imgs = []
-
-    # Основной селектор
-    for li in preview_items:
-        img = li.select_one("img")
-        if img:
-            if img.get("src"):
-                preview_attr_counts["src"] += 1
-            if img.get("data-src"):
-                preview_attr_counts["data_src"] += 1
-            if img.get("data-srcset"):
-                preview_attr_counts["data_srcset"] += 1
-            if img.get("srcset"):
-                preview_attr_counts["srcset"] += 1
-            if img.get("data-url"):
-                preview_attr_counts["data_url"] += 1
-            src = img.get("src") or img.get("data-src")
-            if src and isinstance(src, str) and src not in seen:
-                images.append(src)
-                seen.add(src)
-
-    # Альтернативный селектор
-    if not images:
-        gallery_imgs = soup.select('div[data-marker="item-view/gallery"] img')
-        for img in gallery_imgs:
-            if img.get("src"):
-                gallery_attr_counts["src"] += 1
-            if img.get("data-src"):
-                gallery_attr_counts["data_src"] += 1
-            if img.get("data-srcset"):
-                gallery_attr_counts["data_srcset"] += 1
-            if img.get("srcset"):
-                gallery_attr_counts["srcset"] += 1
-            if img.get("data-url"):
-                gallery_attr_counts["data_url"] += 1
-            src = img.get("src")
-            if src and isinstance(src, str) and src not in seen:
-                images.append(src)
-                seen.add(src)
-
-    # region agent log
-    _debug_log(
-        {
-            "sessionId": "debug-session",
-            "runId": _DEBUG_RUN_ID,
-            "hypothesisId": "H3",
-            "location": "card_parser.py:_extract_images_from_html_gallery",
-            "message": "html_gallery_scan",
-            "data": {
-                "preview_items": len(preview_items),
-                "preview_attrs": preview_attr_counts,
-                "gallery_items": len(gallery_imgs),
-                "gallery_attrs": gallery_attr_counts,
-                "images_found": len(images),
-            },
-            "timestamp": int(time.time() * 1000),
-        }
-    )
-    # endregion agent log
-    return images
-
-
-def _extract_images_from_og_meta(soup: BeautifulSoup) -> list[str]:
-    """Fallback: извлечение из OpenGraph meta-тегов."""
-    images: list[str] = []
-    for meta in soup.select('meta[property="og:image"]'):
-        content = meta.get("content")
-        if content and isinstance(content, str):
-            images.append(content)
-    return images
-
-
-def _extract_images(soup: BeautifulSoup, html: str) -> list[str]:
+async def _extract_images(soup: BeautifulSoup, html: str, page: Page) -> list[str]:
     """
     Извлекает URL изображений высокого качества из HTML карточки Avito.
 
     Стратегия (по приоритету):
-    1. JSON из __preloadedState__ → imageUrls[]["1280x960"]
-    2. HTML галерея → li[data-marker="image-preview/item"] img
-    3. OpenGraph meta → meta[property="og:image"]
+    1. Regex из HTML → __staticRouterHydrationData или __preloadedState__ → imageUrls["1280x960"]
+    2. page.evaluate() → window.__staticRouterHydrationData / __preloadedState__ (CSR fallback)
+    3. Пустой список (лучше 0 фото, чем 20 мусорных 75x55)
 
     Args:
         soup: BeautifulSoup объект
-        html: Исходный HTML (для парсинга JSON без str(soup))
+        html: Исходный HTML (для regex-парсинга JSON)
+        page: Playwright Page (для page.evaluate fallback)
 
     Returns:
         list[str]: Список URL (пустой если изображений нет)
     """
 
-    # === Стратегия 1: __preloadedState__ JSON ===
-    state = _parse_preloaded_state(html)
-
-    if state:
+    # === Стратегия 1: Regex из HTML source ===
+    # Перебираем все найденные JSON-состояния (hydration → preloaded)
+    for state in _parse_json_states(html):
         # Пробуем известные пути
         image_urls: Optional[list] = None
         for path in _IMAGE_PATHS:
@@ -742,44 +716,16 @@ def _extract_images(soup: BeautifulSoup, html: str) -> list[str]:
                 logger.debug("Found imageUrls via recursive search")
 
         if image_urls:
-            sample_keys: list[str] = []
-            if image_urls and isinstance(image_urls, list):
-                first = image_urls[0]
-                if isinstance(first, dict):
-                    sample_keys = list(first.keys())[:6]
             urls = _extract_urls_from_image_data(image_urls)
-            # region agent log
-            _debug_log(
-                {
-                    "sessionId": "debug-session",
-                    "runId": _DEBUG_RUN_ID,
-                    "hypothesisId": "H2",
-                    "location": "card_parser.py:_extract_images",
-                    "message": "image_urls_extracted",
-                    "data": {
-                        "image_urls_len": len(image_urls) if isinstance(image_urls, list) else None,
-                        "sample_keys": sample_keys,
-                        "urls_extracted_len": len(urls),
-                    },
-                    "timestamp": int(time.time() * 1000),
-                }
-            )
-            # endregion agent log
             if urls:
-                logger.debug(f"Extracted {len(urls)} HQ image URLs from JSON")
+                logger.debug(f"Regex extraction: {len(urls)} HQ image URLs")
                 return urls
 
-    # === Стратегия 2: HTML галерея ===
-    urls = _extract_images_from_html_gallery(soup)
+    # === Стратегия 2: page.evaluate() (CSR fallback) ===
+    urls = await _extract_images_via_js(page)
     if urls:
-        logger.debug(f"Using HTML gallery fallback: {len(urls)} URLs")
         return urls
 
-    # === Стратегия 3: OpenGraph meta ===
-    urls = _extract_images_from_og_meta(soup)
-    if urls:
-        logger.debug(f"Using og:image fallback: {len(urls)} URLs")
-        return urls
-
-    logger.debug("No images found in HTML")
+    # === Стратегия 3: пустой список ===
+    logger.debug("No HQ images found — returning empty list (no garbage fallback)")
     return []
