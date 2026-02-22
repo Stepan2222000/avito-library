@@ -26,6 +26,9 @@ FILTER_DELAY_MS = 1000
 SCROLL_DELAY_MS = 500
 SHOW_BUTTON_WAIT_MS = 2000
 ELEMENT_TIMEOUT_MS = 10000
+REACT_HYDRATION_TIMEOUT_MS = 15000
+REACT_HYDRATION_POLL_MS = 500
+CONDITION_MAX_ATTEMPTS = 3
 
 
 async def apply_mechanical_filters(
@@ -134,6 +137,10 @@ async def _fill_condition(page: Page, condition: str) -> None:
     - Автомобили: "Все", "С пробегом", "Новые"
     - Телефоны: "Любое", "Новое", "Б/у"
     - Запчасти: "Все", "Новые", "Б/у"
+
+    Avito использует React с ленивой гидратацией. До завершения гидратации
+    обработчики событий не подключены к DOM, и клик по radio не срабатывает
+    (оба radio остаются checked=true, React state не обновляется).
     """
     radio = page.get_by_label(condition, exact=True).first
 
@@ -141,10 +148,51 @@ async def _fill_condition(page: Page, condition: str) -> None:
         logger.error("Фильтр состояния '%s' не найден на странице", condition)
         raise ValueError(f"Фильтр состояния '{condition}' не найден на странице")
 
+    # Ждём React гидратацию — без неё клик не обработается
+    polls = REACT_HYDRATION_TIMEOUT_MS // REACT_HYDRATION_POLL_MS
+    for i in range(polls):
+        try:
+            hydrated = await radio.evaluate(
+                "el => Object.keys(el).some(k => k.startsWith('__reactFiber'))"
+            )
+            if hydrated:
+                logger.debug("React гидратирован за %d мс", (i + 1) * REACT_HYDRATION_POLL_MS)
+                break
+        except Exception:
+            pass
+        await page.wait_for_timeout(REACT_HYDRATION_POLL_MS)
+    else:
+        logger.warning("React не гидратирован за %d мс, пробуем кликнуть", REACT_HYDRATION_TIMEOUT_MS)
+
     await radio.scroll_into_view_if_needed()
     await page.wait_for_timeout(SCROLL_DELAY_MS)
-    await radio.click(force=True)
-    await page.wait_for_timeout(FILTER_DELAY_MS)
+
+    # Кликаем по label (родитель hidden input) с верификацией
+    label = radio.locator("xpath=..")
+    for attempt in range(1, CONDITION_MAX_ATTEMPTS + 1):
+        await label.click()
+        await page.wait_for_timeout(FILTER_DELAY_MS)
+
+        # Проверяем: в группе ровно 1 checked radio и это наш
+        checked_count = await radio.evaluate("""el => {
+            const group = el.closest('[role="group"]');
+            if (!group) return -1;
+            return [...group.querySelectorAll('input[type="radio"]')].filter(r => r.checked).length;
+        }""")
+        is_checked = await radio.is_checked()
+
+        if checked_count == 1 and is_checked:
+            if attempt > 1:
+                logger.info("Фильтр '%s' применён с попытки %d", condition, attempt)
+            return
+
+        logger.warning(
+            "Клик по '%s' не сработал (checked_count=%s, попытка %d/%d)",
+            condition, checked_count, attempt, CONDITION_MAX_ATTEMPTS,
+        )
+        await page.wait_for_timeout(1000)
+
+    logger.error("Фильтр '%s' не применён после %d попыток", condition, CONDITION_MAX_ATTEMPTS)
 
 
 async def _fill_year(page: Page, year_from: int | None, year_to: int | None) -> None:
