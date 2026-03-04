@@ -446,6 +446,16 @@ async def _click_show_button(page: Page) -> None:
         logger.info("Кнопка 'Показать' не стала видимой — фильтры уже применены через навигацию")
         return
 
+    # Проверяем, не disabled ли кнопка (0 результатов после фильтрации)
+    is_disabled = await btn.get_attribute("aria-disabled")
+    if is_disabled == "true":
+        text = await btn.text_content(timeout=1000) or ""
+        logger.warning(
+            "Кнопка 'Показать' disabled (0 результатов после фильтрации): %s",
+            text.strip()[:50],
+        )
+        return
+
     await btn.scroll_into_view_if_needed()
     await btn.click()
     await page.wait_for_timeout(2000)
