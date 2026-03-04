@@ -144,9 +144,22 @@ async def _fill_condition(page: Page, condition: str) -> None:
     """
     radio = page.get_by_label(condition, exact=True).first
 
-    if not await radio.count():
-        logger.error("Фильтр состояния '%s' не найден на странице", condition)
-        raise ValueError(f"Фильтр состояния '{condition}' не найден на странице")
+    # Поллинг до 60 сек: ждём появления radio-элемента (после 429/капчи рендер долгий)
+    poll_ms = 500
+    max_wait_ms = 60_000
+    for elapsed in range(0, max_wait_ms, poll_ms):
+        if await radio.count():
+            if elapsed > 0:
+                logger.info("Фильтр '%s' появился через %d мс", condition, elapsed)
+            break
+        await page.wait_for_timeout(poll_ms)
+    else:
+        logger.warning(
+            "Фильтр состояния '%s' не найден на странице после %d сек — "
+            "категория может не поддерживать этот фильтр, пропускаем",
+            condition, max_wait_ms // 1000,
+        )
+        return
 
     # Ждём React гидратацию — без неё клик не обработается
     polls = REACT_HYDRATION_TIMEOUT_MS // REACT_HYDRATION_POLL_MS
